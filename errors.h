@@ -1,0 +1,10 @@
+#ifndef ERRORS_H
+#define ERRORS_H
+
+#define BW2_ERROR_MALFORMED_FRAME (1)
+#define BW2_ERROR_FRAME_HEAP_FULL (2)
+#define BW2_ERROR_BAD_ARG (3)
+#define BW2_ERROR_BAD_DOT_FORM (4)
+#define BW2_ERROR_UNEXPECTED_FRAME (5)
+
+#endif
