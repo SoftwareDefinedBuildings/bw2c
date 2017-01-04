@@ -1,10 +1,21 @@
 #include <errno.h>
+#include <inttypes.h>
 #include <stdbool.h>
+#include <stdio.h>
 #include <unistd.h>
 
 #include "errors.h"
 #include "frame.h"
 #include "utils.h"
+
+struct bw2frameheader {
+    char command[4];
+    char space0;
+    char framelength[10];
+    char space1;
+    char seqno[10];
+    char newline;
+};
 
 int _bw2_frame_read_KV(struct bw2header** header, char* frameheap, size_t heapsize, size_t* heapused, int fd);
 int _bw2_frame_read_PO(struct bw2payloadobj** pobj, char* frameheap, size_t heapsize, size_t* heapused, int fd);
@@ -40,8 +51,10 @@ int bw2_readFrame(struct bw2frame* frame, char* frameheap, size_t heapsize, size
     header[15] = '\0';
     header[26] = '\0';
     strncpy(frame->cmd, header, sizeof(frame->cmd));
-    frame->length = (int32_t) strtoll(&header[5], NULL, 10);
-    frame->seqno = (int32_t) strtoll(&header[16], NULL, 10);
+    /* We just throw away the length stated in the frame, but we could get it
+     * with (int32_t) strtoll(&header[5], NULL, 10).
+     */
+    frame->seqno = (int32_t) strtoull(&header[16], NULL, 10);
 
     /* Now, we nead to read each header, PO, and RO. */
     char objtype[4];
@@ -53,10 +66,6 @@ int bw2_readFrame(struct bw2frame* frame, char* frameheap, size_t heapsize, size
 
         objtype[3] = '\0';
 
-        struct bw2header* lasthdr = NULL;
-        struct bw2payloadobj* lastpo = NULL;
-        struct bw2routingobj* lastro = NULL;
-
         if (strcmp(objtype, "kv ") == 0) {
             struct bw2header* hdr = NULL;
             res = _bw2_frame_read_KV(&hdr, frameheap, heapsize, heapused, fd);
@@ -66,13 +75,12 @@ int bw2_readFrame(struct bw2frame* frame, char* frameheap, size_t heapsize, size
                 return res;
             }
             hdr->next = NULL;
-            if (lasthdr == NULL) {
-                frame->headers = hdr;
-                lasthdr = hdr;
+            if (frame->lasthdr == NULL) {
+                frame->hdrs = hdr;
             } else {
-                lasthdr->next = hdr;
-                lasthdr = hdr;
+                frame->lasthdr->next = hdr;
             }
+            frame->lasthdr = hdr;
         } else if (strcmp(objtype, "ro ") == 0) {
             struct bw2routingobj* ro = NULL;
             res = _bw2_frame_read_RO(&ro, frameheap, heapsize, heapused, fd);
@@ -82,13 +90,12 @@ int bw2_readFrame(struct bw2frame* frame, char* frameheap, size_t heapsize, size
                 return res;
             }
             ro->next = NULL;
-            if (lastro == NULL) {
+            if (frame->lastro == NULL) {
                 frame->ros = ro;
-                lastro = ro;
             } else {
-                lastro->next = ro;
-                lastro = ro;
+                frame->lastro->next = ro;
             }
+            frame->lastro = ro;
         } else if (strcmp(objtype, "po ") == 0) {
             struct bw2payloadobj* po = NULL;
             res = _bw2_frame_read_PO(&po, frameheap, heapsize, heapused, fd);
@@ -98,13 +105,12 @@ int bw2_readFrame(struct bw2frame* frame, char* frameheap, size_t heapsize, size
                 return res;
             }
             po->next = NULL;
-            if (lastpo == NULL) {
+            if (frame->lastpo == NULL) {
                 frame->pos = po;
-                lastpo = po;
             } else {
-                lastpo->next = po;
-                lastpo = po;
+                frame->lastpo->next = po;
             }
+            frame->lastpo = po;
         } else if (strcmp(objtype, "end") == 0) {
             res = _bw2_frame_consume_newline(fd);
             if (res != 0) {
@@ -118,6 +124,140 @@ int bw2_readFrame(struct bw2frame* frame, char* frameheap, size_t heapsize, size
 
     return 0;
 }
+
+struct bw2header* bw2_getFirstHeader(struct bw2frame* frame, const char* key) {
+    struct bw2header* curr;
+    for (curr = frame->hdrs; curr != NULL; curr = curr->next) {
+        if (strncmp(curr->key, key, sizeof(curr->key)) == 0) {
+            return curr;
+        }
+    }
+    return NULL;
+}
+
+void bw2_frameFreeResources(struct bw2frame* frame) {
+    struct bw2header* hcurr, * hnext;
+    struct bw2payloadobj* pcurr, * pnext;
+    struct bw2routingobj* rcurr, * rnext;
+
+    for (hcurr = frame->hdrs; hcurr != NULL; hcurr = hnext) {
+        hnext = hcurr->next;
+        free(hcurr);
+    }
+
+    for (pcurr = frame->pos; pcurr != NULL; pcurr = pnext) {
+        pnext = pcurr->next;
+        free(pcurr);
+    }
+
+    for (rcurr = frame->ros; rcurr != NULL; rcurr = rnext) {
+        rnext = rcurr->next;
+        free(rcurr);
+    }
+}
+
+size_t _bw2_frame_KV_len(struct bw2header* hdr);
+size_t _bw2_frame_PO_len(struct bw2payloadobj* po);
+size_t _bw2_frame_RO_len(struct bw2routingobj* ro);
+
+size_t bw2_frameLength(struct bw2frame* frame) {
+    size_t framelen = 4; // for the "end\n"
+
+    struct bw2header* hcurr;
+    struct bw2payloadobj* pcurr;
+    struct bw2routingobj* rcurr;
+
+    for (hcurr = frame->hdrs; hcurr != NULL; hcurr = hcurr->next) {
+        framelen += _bw2_frame_KV_len(hcurr);
+    }
+
+    for (pcurr = frame->pos; pcurr != NULL; pcurr = pcurr->next) {
+        framelen += _bw2_frame_PO_len(pcurr);
+    }
+
+    for (rcurr = frame->ros; rcurr != NULL; rcurr = rcurr->next) {
+        framelen += _bw2_frame_RO_len(rcurr);
+    }
+
+    return framelen;
+}
+
+int bw2_writeFrame(struct bw2frame* frame, int fd) {
+    /* The frame length goes in the frame header, which is transmitted before
+     * the actual frame. So we actually have to count the length before
+     * transmitting the frame.
+     */
+    size_t framelen = bw2_frameLength(frame);
+    struct bw2frameheader frhdr;
+
+    memcpy(&frhdr.command, frame->cmd, sizeof(frhdr.command));
+    frhdr.space0 = ' ';
+    snprintf(frhdr.framelength, sizeof(frhdr.framelength), "%010zu", framelen);
+    frhdr.space1 = ' ';
+    snprintf(frhdr.seqno, sizeof(frhdr.seqno), "%010" PRId32, frame->seqno);
+    frhdr.newline = '\n';
+
+    int rv = write_full_array((char*) &frhdr, sizeof(frhdr), fd);
+    if (rv != 0) {
+        return rv;
+    }
+
+    struct bw2header* hcurr;
+    struct bw2payloadobj* pcurr;
+    struct bw2routingobj* rcurr;
+
+    char localheader[BW2_FRAME_MAX_LOCAL_HEADER_LENGTH];
+
+    for (hcurr = frame->hdrs; hcurr != NULL; hcurr = hcurr->next) {
+        snprintf(localheader, sizeof(localheader), "kv %s %zu\n", hcurr->key, hcurr->len);
+        rv = write_full_array(localheader, strlen(localheader), fd);
+        if (rv != 0) {
+            return rv;
+        }
+        rv = write_full_array(hcurr->value, hcurr->len, fd);
+        if (rv != 0) {
+            return rv;
+        }
+        rv = write_full_array("\n", 1, fd);
+        if (rv != 0) {
+            return rv;
+        }
+    }
+
+    for (pcurr = frame->pos; pcurr != NULL; pcurr = pcurr->next) {
+        snprintf(localheader, sizeof(localheader), "po :%" PRIu32 " %zu\n", pcurr->ponum, pcurr->polen);
+        rv = write_full_array(localheader, strlen(localheader), fd);
+        if (rv != 0) {
+            return rv;
+        }
+        rv = write_full_array(pcurr->po, pcurr->polen, fd);
+        if (rv != 0) {
+            return rv;
+        }
+        rv = write_full_array("\n", 1, fd);
+        if (rv != 0) {
+            return rv;
+        }
+    }
+
+    for (rcurr = frame->ros; rcurr != NULL; rcurr = rcurr->next) {
+        snprintf(localheader, sizeof(localheader), "ro %" PRIu8 " %zu\n", rcurr->ronum, rcurr->rolen);
+        rv = write_full_array(localheader, strlen(localheader), fd);
+        if (rv != 0) {
+            return rv;
+        }
+        rv = write_full_array(rcurr->ro, rcurr->rolen, fd);
+        if (rv != 0) {
+            return rv;
+        }
+        rv = write_full_array("\n", 1, fd);
+        if (rv != 0) {
+            return rv;
+        }
+    }
+}
+
+/* Helper functions for parsing a frame from the wire OOB format. */
 
 int _bw2_frame_read_token(char* buf, size_t buflen, char delimiter, int fd) {
     size_t bytesread;
@@ -198,6 +338,7 @@ int _bw2_frame_read_KV(struct bw2header** header, char* frameheap, size_t heapsi
     } else {
         strncpy(hdr->key, key, BW2_FRAME_MAX_KEY_LENGTH + 1);
         hdr->len = vallen;
+        hdr->value = (char*) (hdr + 1);
         rv = read_until_full(hdr->value, vallen, fd, NULL);
     }
 
@@ -228,11 +369,11 @@ int _bw2_frame_read_PO(struct bw2payloadobj** pobj, char* frameheap, size_t heap
         return rv;
     }
 
-    int32_t ponum;
+    uint32_t ponum;
     const char* colon = strchr(ponumstr, ':');
     if (ponumstr == colon) {
         errno = 0;
-        ponum = (int32_t) strtoull(&ponumstr[1], NULL, 10);
+        ponum = (uint32_t) strtoull(&ponumstr[1], NULL, 10);
         if (errno != 0) {
             return BW2_ERROR_MALFORMED_FRAME;
         }
@@ -258,6 +399,7 @@ int _bw2_frame_read_PO(struct bw2payloadobj** pobj, char* frameheap, size_t heap
     } else {
         po->ponum = ponum;
         po->polen = vallen;
+        po->po = (char*) (po + 1);
         rv = read_until_full(po->po, vallen, fd, NULL);
     }
 
@@ -304,6 +446,7 @@ int _bw2_frame_read_RO(struct bw2routingobj** robj, char* frameheap, size_t heap
     } else {
         ro->ronum = ronum;
         ro->rolen = vallen;
+        ro->ro = (char*) (ro + 1);
         rv = read_until_full(ro->ro, vallen, fd, NULL);
     }
 
@@ -318,4 +461,48 @@ int _bw2_frame_read_RO(struct bw2routingobj** robj, char* frameheap, size_t heap
 
     *robj = ro;
     return 0;
+}
+
+size_t _bw2_num_digits(size_t x) {
+    size_t count = 1;
+    while (x >= 10) {
+        x /= 10;
+        count++;
+    }
+    return count;
+}
+
+/* Helper functions to find the length of a header, PO, or RO that is to be
+ * written out.
+ */
+
+size_t _bw2_frame_KV_len(struct bw2header* hdr) {
+    size_t lenlen = _bw2_num_digits(hdr->len);
+
+    /* We add 6 for the "kv " at the beginning, the space between the key and
+     * the length, the newline after the length, and the newline after the
+     * value.
+     */
+    return 3 + strlen(hdr->key) + 1 + lenlen + 1 + hdr->len + 1;
+}
+
+size_t _bw2_frame_PO_len(struct bw2payloadobj* po) {
+    size_t ponumlen = _bw2_num_digits(po->ponum);
+    size_t lenlen = _bw2_num_digits(po->polen);
+
+    /* We add 7 for the "po " at the beginning, the colon before the PONum, the
+     * space between the PONum and the length, the newline after the length, and
+     * the newline after the PO.
+     */
+    return 3 + 1 + ponumlen + 1 + lenlen + 1 + po->polen + 1;
+}
+
+size_t _bw2_frame_RO_len(struct bw2routingobj* ro) {
+    size_t octetlen = _bw2_num_digits((size_t) ro->ronum);
+    size_t lenlen = _bw2_num_digits(ro->rolen);
+
+    /* We add 6 for the "ro " at the beginning, the space between the RONum and
+     * the length, the newline after the length, and the newline after the RO.
+     */
+    return 3 + octetlen + 1 + lenlen + 1 + ro->rolen + 1;
 }

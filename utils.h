@@ -27,7 +27,11 @@ int read_until_full(char* arr, size_t len, int fd, size_t* bytesread);
 
 int drop_full_array(size_t len, int fd, size_t* bytesread);
 
-
 int ponum_from_dot_form(const char* dotform, int32_t* ponum);
+
+
+/* The following functions do not use the above four error codes. */
+
+int write_full_array(char* arr, size_t len, int fd);
 
 #endif

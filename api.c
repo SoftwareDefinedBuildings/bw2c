@@ -1,3 +1,4 @@
+#include <stdio.h>
 #include <string.h>
 
 #include <sys/socket.h>
@@ -8,8 +9,22 @@
 #include "errors.h"
 #include "frame.h"
 
+int32_t _bw2_getSeqNo(struct bw2client* client) {
+    int32_t seqno;
+    
+    bw2_mutexLock(&client->seqnolock);
+    seqno = client->curseqno;
+    client->curseqno = (client->curseqno + 1) & (int32_t) 0x7FFFFFFF;
+    bw2_mutexUnlock(&client->seqnolock);
+
+    return seqno;
+}
+
 void bw2_client_init(struct bw2client* client) {
     memset(client, 0x00, sizeof(struct bw2client));
+    bw2_mutexInit(&client->outlock);
+    bw2_mutexInit(&client->reqslock);
+    bw2_mutexInit(&client->seqnolock);
 }
 
 int bw2_connect(struct bw2client* client, const struct sockaddr* addr, socklen_t addrlen) {
@@ -39,6 +54,14 @@ int bw2_connect(struct bw2client* client, const struct sockaddr* addr, socklen_t
         rv = BW2_ERROR_UNEXPECTED_FRAME;
         goto closeanderror;
     }
+
+    struct bw2header* versionhdr = bw2_getFirstHeader(&frame, "version");
+    if (versionhdr == NULL) {
+        rv = BW2_ERROR_MISSING_HEADER;
+        goto closeanderror;
+    }
+
+    printf("Connected to BOSSWAVE router version %.*s\n", (int) versionhdr->len, versionhdr->value);
 
     return 0;
 

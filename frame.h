@@ -11,38 +11,56 @@
 #define BW2_FRAME_MAX_LENGTH_DIGITS 10
 #define BW2_FRAME_MAX_RONUM_LENGTH 3
 
+/* 3 for "po " + key length + 1 for space + 10 for Length +
+ * 1 for space + 1 for null terminator
+ */
+#define BW2_FRAME_MAX_LOCAL_HEADER_LENGTH (3 + BW2_FRAME_MAX_KEY_LENGTH + 1 + 10 + 1 + 1)
+
 struct bw2frame {
     char cmd[5];
-    int32_t length;
     int32_t seqno;
 
     /* Linked lists of headers, pos, and ros. */
-    struct bw2header* headers;
+    struct bw2header* hdrs;
+    struct bw2header* lasthdr;
+
     struct bw2payloadobj* pos;
+    struct bw2payloadobj* lastpo;
+
     struct bw2routingobj* ros;
+    struct bw2routingobj* lastro;
 };
 
 struct bw2header {
     struct bw2header* next;
     char key[BW2_FRAME_MAX_KEY_LENGTH + 1];
     size_t len;
-    char value[0];
+    char* value;
 };
 
 struct bw2routingobj {
     struct bw2routingobj* next;
-    int32_t ronum;
+    uint8_t ronum;
     size_t rolen;
-    char ro[0];
+    char* ro;
 };
 
 struct bw2payloadobj {
     struct bw2payloadobj* next;
-    int32_t ponum;
+    uint32_t ponum;
     size_t polen;
-    char po[0];
+    char* po;
 };
 
 int bw2_readFrame(struct bw2frame* frame, char* frameheap, size_t heapsize, size_t* heapused, int fd);
+struct bw2header* bw2_getFirstHeader(struct bw2frame* frame, const char* key);
+
+/* The frameFreeResources function is needed only for frames whose resources are
+ * allocated with malloc (i.e., with a NULL frame heap).
+ */
+void bw2_frameFreeResources(struct bw2frame* frame);
+
+size_t bw2_frameLength(struct bw2frame* frame);
+int bw2_writeFrame(struct bw2frame* frame, int fd);
 
 #endif

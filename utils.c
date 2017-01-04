@@ -132,3 +132,15 @@ int ponum_from_dot_form(const char* dotform, int32_t* ponum) {
     *ponum = (((int32_t) first) << 24) | (((int32_t) second) << 16) | (((int32_t) third) << 8) | ((int32_t) fourth);
     return 0;
 }
+
+int write_full_array(char* arr, size_t len, int fd) {
+    size_t written = 0;
+    while (written != len) {
+        ssize_t rv = write(fd, arr, len - written);
+        if (rv == -1) {
+            return -1;
+        }
+        written += rv;
+    }
+    return 0;
+}

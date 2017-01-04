@@ -6,5 +6,6 @@
 #define BW2_ERROR_BAD_ARG (3)
 #define BW2_ERROR_BAD_DOT_FORM (4)
 #define BW2_ERROR_UNEXPECTED_FRAME (5)
+#define BW2_ERROR_MISSING_HEADER (6)
 
 #endif
