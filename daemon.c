@@ -8,8 +8,8 @@
 #include "frame.h"
 #include "osutil.h"
 
-void bw2_daemon(struct bw2client* client, char* frameheap, size_t heapsize) {
-    struct bw2frame frame;
+void bw2_daemon(struct bw2_client* client, char* frameheap, size_t heapsize) {
+    struct bw2_frame frame;
     int rv;
     while (true) {
         rv = bw2_readFrame(&frame, frameheap, heapsize, client->connfd);
@@ -18,7 +18,7 @@ void bw2_daemon(struct bw2client* client, char* frameheap, size_t heapsize) {
         struct bw2_reqctx* curr = *currptr;
         while (curr != NULL) {
             if (curr->seqno == frame.seqno) {
-                struct bw2header* finishhdr = bw2_getFirstHeader(&frame, "finished");
+                struct bw2_header* finishhdr = bw2_getFirstHeader(&frame, "finished");
 
                 struct bw2_reqctx* next = curr->next;
 
@@ -51,7 +51,7 @@ void bw2_daemon(struct bw2client* client, char* frameheap, size_t heapsize) {
     }
 }
 
-int bw2_transact(struct bw2client* client, struct bw2frame* frame, struct bw2_reqctx* reqctx) {
+int bw2_transact(struct bw2_client* client, struct bw2_frame* frame, struct bw2_reqctx* reqctx) {
     if (reqctx != NULL) {
         reqctx->seqno = frame->seqno;
 

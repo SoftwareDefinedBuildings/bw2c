@@ -18,7 +18,7 @@
 
 #define BW2_PORT 28589
 
-struct bw2client {
+struct bw2_client {
     int connfd;
     struct bw2_mutex outlock;
 
@@ -44,8 +44,8 @@ struct bw2_publishParams {
     char* uri;
     char* primaryAccessChain;
     bool autoChain;
-    struct bw2routingobj* routingObjects;
-    struct bw2payloadobj* payloadObjects;
+    struct bw2_routingobj* routingObjects;
+    struct bw2_payloadobj* payloadObjects;
     struct tm* expiry;
     uint64_t expiryDelta;
     char* elaboratePAC;
@@ -57,7 +57,7 @@ struct bw2_subscribeParams {
     char* uri;
     char* primaryAccessChain;
     bool autoChain;
-    struct bw2routingobj** routingObjects;
+    struct bw2_routingobj** routingObjects;
     struct tm* expiry;
     uint64_t expiryDelta;
     char* elaboratePAC;
@@ -65,13 +65,13 @@ struct bw2_subscribeParams {
     bool persist;
 };
 
-int32_t _bw2_getSeqNo(struct bw2client* client);
+int32_t _bw2_getSeqNo(struct bw2_client* client);
 
-void bw2_clientInit(struct bw2client* client);
+void bw2_clientInit(struct bw2_client* client);
 
 /* Returns 0 on success, or some positive errno on failure. */
-int bw2_connect(struct bw2client* client, const struct sockaddr* addr, socklen_t addrlen, char* frameheap, size_t heapsize);
-int bw2_setEntity(struct bw2client* client, char* entity, size_t entitylen, struct bw2_vk* vk);
-int bw2_publish(struct bw2client* client, struct bw2_publishParams* p);
+int bw2_connect(struct bw2_client* client, const struct sockaddr* addr, socklen_t addrlen, char* frameheap, size_t heapsize);
+int bw2_setEntity(struct bw2_client* client, char* entity, size_t entitylen, struct bw2_vk* vk);
+int bw2_publish(struct bw2_client* client, struct bw2_publishParams* p);
 
 #endif

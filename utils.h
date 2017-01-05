@@ -20,25 +20,25 @@
  * The number of bytes read from FD, excluding the "UNTIL" character, is stored
  * in BYTESREAD.
  */
-int read_until_char(char* arr, size_t maxlen, char until, int fd, size_t* bytesread);
+int bw2_read_until_char(char* arr, size_t maxlen, char until, int fd, size_t* bytesread);
 
-/* Same as read_until_char, but throws away data instead of storing into an
+/* Same as bw2_read_until_char, but throws away data instead of storing into an
  * array.
  */
-int drop_until_char(char until, int fd, size_t* bytesread);
+int bw2_drop_until_char(char until, int fd, size_t* bytesread);
 
-int read_until_full(char* arr, size_t len, int fd, size_t* bytesread);
+int bw2_read_until_full(char* arr, size_t len, int fd, size_t* bytesread);
 
-int drop_full_array(size_t len, int fd, size_t* bytesread);
+int bw2_drop_full_array(size_t len, int fd, size_t* bytesread);
 
-int ponum_from_dot_form(const char* dotform, int32_t* ponum);
+int bw2_ponum_from_dot_form(const char* dotform, int32_t* ponum);
 
 
 /* The following functions do not use the above four error codes. */
 
-int write_full_array(char* arr, size_t len, int fd);
+int bw2_write_full_array(char* arr, size_t len, int fd);
 
-size_t format_time_rfc3339(char* buf, size_t buflen, struct tm* utctime);
-void format_timedelta(char* buf, size_t buflen, uint64_t timedelta);
+size_t bw2_format_time_rfc3339(char* buf, size_t buflen, struct tm* utctime);
+void bw2_format_timedelta(char* buf, size_t buflen, uint64_t timedelta);
 
 #endif

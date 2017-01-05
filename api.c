@@ -13,7 +13,7 @@
 #include "ponum.h"
 #include "utils.h"
 
-int32_t _bw2_getSeqNo(struct bw2client* client) {
+int32_t _bw2_getSeqNo(struct bw2_client* client) {
     int32_t seqno;
 
     bw2_mutexLock(&client->seqnolock);
@@ -24,15 +24,15 @@ int32_t _bw2_getSeqNo(struct bw2client* client) {
     return seqno;
 }
 
-void bw2_clientInit(struct bw2client* client) {
-    memset(client, 0x00, sizeof(struct bw2client));
+void bw2_clientInit(struct bw2_client* client) {
+    memset(client, 0x00, sizeof(struct bw2_client));
     bw2_mutexInit(&client->outlock);
     bw2_mutexInit(&client->reqslock);
     bw2_mutexInit(&client->seqnolock);
 }
 
 struct bw2_daemon_args {
-    struct bw2client* client;
+    struct bw2_client* client;
     size_t heapsize;
 };
 
@@ -47,7 +47,7 @@ void* _bw2_daemon_trampoline(void* arg) {
     return NULL;
 }
 
-int bw2_connect(struct bw2client* client, const struct sockaddr* addr, socklen_t addrlen, char* frameheap, size_t heapsize) {
+int bw2_connect(struct bw2_client* client, const struct sockaddr* addr, socklen_t addrlen, char* frameheap, size_t heapsize) {
     int sock = socket(addr->sa_family, SOCK_STREAM, 0);
     if (sock == -1) {
         return -1;
@@ -60,7 +60,7 @@ int bw2_connect(struct bw2client* client, const struct sockaddr* addr, socklen_t
 
     client->connfd = sock;
 
-    struct bw2frame frame;
+    struct bw2_frame frame;
 
     rv = bw2_readFrame(&frame, frameheap, heapsize, sock);
     if (rv != 0) {
@@ -72,7 +72,7 @@ int bw2_connect(struct bw2client* client, const struct sockaddr* addr, socklen_t
         goto closeanderror;
     }
 
-    struct bw2header* versionhdr = bw2_getFirstHeader(&frame, "version");
+    struct bw2_header* versionhdr = bw2_getFirstHeader(&frame, "version");
     if (versionhdr == NULL) {
         rv = BW2_ERROR_MISSING_HEADER;
         goto closeanderror;
@@ -101,7 +101,7 @@ struct bw2_simpleReq_ctx {
     int rv;
 };
 
-bool _bw2_simpleReq_cb(struct bw2frame* frame, bool final, void* ctx) {
+bool _bw2_simpleReq_cb(struct bw2_frame* frame, bool final, void* ctx) {
     (void) final;
 
     struct bw2_simpleReq_ctx* sreqctx = ctx;
@@ -119,13 +119,13 @@ struct bw2_setEntity_ctx {
     int rv;
 };
 
-bool _bw2_setEntity_cb(struct bw2frame* frame, bool final, void* ctx) {
+bool _bw2_setEntity_cb(struct bw2_frame* frame, bool final, void* ctx) {
     (void) final;
 
     struct bw2_setEntity_ctx* sectx = ctx;
 
     if (sectx->vk != NULL) {
-        struct bw2header* vkhdr = bw2_getFirstHeader(frame, "vk");
+        struct bw2_header* vkhdr = bw2_getFirstHeader(frame, "vk");
         if (vkhdr != NULL) {
             bw2_vk_set(sectx->vk, vkhdr->value, vkhdr->len);
         }
@@ -138,11 +138,11 @@ bool _bw2_setEntity_cb(struct bw2frame* frame, bool final, void* ctx) {
     return true;
 }
 
-int bw2_setEntity(struct bw2client* client, char* entity, size_t entitylen, struct bw2_vk* vk) {
-    struct bw2frame req;
+int bw2_setEntity(struct bw2_client* client, char* entity, size_t entitylen, struct bw2_vk* vk) {
+    struct bw2_frame req;
     bw2_frameInit(&req, BW2_FRAME_CMD_SET_ENTITY, _bw2_getSeqNo(client));
 
-    struct bw2payloadobj po;
+    struct bw2_payloadobj po;
     bw2_POInit(&po, BW2_PONUM_ROENTITYWKEY, entity, entitylen);
     bw2_appendPO(&req, &po);
 
@@ -162,8 +162,8 @@ int bw2_setEntity(struct bw2client* client, char* entity, size_t entitylen, stru
     return sectx.rv;
 }
 
-int bw2_publish(struct bw2client* client, struct bw2_publishParams* p) {
-    struct bw2frame req;
+int bw2_publish(struct bw2_client* client, struct bw2_publishParams* p) {
+    struct bw2_frame req;
     if (p->persist) {
         bw2_frameInit(&req, BW2_FRAME_CMD_PERSIST, _bw2_getSeqNo(client));
     } else {
@@ -171,27 +171,27 @@ int bw2_publish(struct bw2client* client, struct bw2_publishParams* p) {
     }
     char timeabsbuf[BW2_FRAME_MAX_TIMESTR_LENGTH + 1];
     char timedeltabuf[BW2_FRAME_MAX_TIME_DIGITS + 4];
-    struct bw2header autochain;
-    struct bw2header expiry;
-    struct bw2header expirydelta;
-    struct bw2header uri;
-    struct bw2header pac;
-    struct bw2header elaboratePAC;
-    struct bw2header doverify;
-    struct bw2header persist;
+    struct bw2_header autochain;
+    struct bw2_header expiry;
+    struct bw2_header expirydelta;
+    struct bw2_header uri;
+    struct bw2_header pac;
+    struct bw2_header elaboratePAC;
+    struct bw2_header doverify;
+    struct bw2_header persist;
     if (p->autoChain) {
         bw2_KVInit(&autochain, "autochain", "true", 0);
         bw2_appendKV(&req, &autochain);
     }
 
     if (p->expiry != NULL) {
-        format_time_rfc3339(timeabsbuf, sizeof(timeabsbuf), p->expiry);
+        bw2_format_time_rfc3339(timeabsbuf, sizeof(timeabsbuf), p->expiry);
         bw2_KVInit(&expiry, "expiry", timeabsbuf, 0);
         bw2_appendKV(&req, &expiry);
     }
 
     if (p->expiryDelta != 0) {
-        format_timedelta(timedeltabuf, sizeof(timedeltabuf), p->expiryDelta);
+        bw2_format_timedelta(timedeltabuf, sizeof(timedeltabuf), p->expiryDelta);
         bw2_KVInit(&expirydelta, "expirydelta", timedeltabuf, 0);
         bw2_appendKV(&req, &expirydelta);
     }

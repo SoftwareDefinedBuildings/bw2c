@@ -7,7 +7,7 @@
 #include "osutil.h"
 
 struct bw2_reqctx {
-    bool (*onframe)(struct bw2frame*, bool final, void* ctx);
+    bool (*onframe)(struct bw2_frame*, bool final, void* ctx);
     void* ctx;
 
     /* Set internally by the daemon. */
@@ -24,8 +24,8 @@ struct bw2_monitor {
 /* This function runs on a separate BOSSWAVE thread. It repeatedly reads frames
  * from the agent and handles them.
  */
-void bw2_daemon(struct bw2client* client, char* frameheap, size_t heapsize);
-int bw2_transact(struct bw2client* client, struct bw2frame* frame, struct bw2_reqctx* reqctx);
+void bw2_daemon(struct bw2_client* client, char* frameheap, size_t heapsize);
+int bw2_transact(struct bw2_client* client, struct bw2_frame* frame, struct bw2_reqctx* reqctx);
 
 int bw2_monitorInit(struct bw2_monitor* mtr);
 int bw2_monitorWait(struct bw2_monitor* mtr);

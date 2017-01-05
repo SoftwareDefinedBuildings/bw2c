@@ -56,65 +56,65 @@
 #define BW2_FRAME_CMD_RESPONSE "resp"
 #define BW2_FRAME_CMD_RESULT "rslt"
 
-struct bw2frame {
+struct bw2_frame {
     char cmd[4];
     int32_t seqno;
 
     /* Linked lists of headers, pos, and ros. */
-    struct bw2header* hdrs;
-    struct bw2header* lasthdr;
+    struct bw2_header* hdrs;
+    struct bw2_header* lasthdr;
 
-    struct bw2payloadobj* pos;
-    struct bw2payloadobj* lastpo;
+    struct bw2_payloadobj* pos;
+    struct bw2_payloadobj* lastpo;
 
-    struct bw2routingobj* ros;
-    struct bw2routingobj* lastro;
+    struct bw2_routingobj* ros;
+    struct bw2_routingobj* lastro;
 };
 
-struct bw2header {
-    struct bw2header* next;
+struct bw2_header {
+    struct bw2_header* next;
     char* key;
     size_t len;
     char* value;
 };
 
-struct bw2routingobj {
-    struct bw2routingobj* next;
+struct bw2_routingobj {
+    struct bw2_routingobj* next;
     uint8_t ronum;
     size_t rolen;
     char* ro;
 };
 
-struct bw2payloadobj {
-    struct bw2payloadobj* next;
+struct bw2_payloadobj {
+    struct bw2_payloadobj* next;
     uint32_t ponum;
     size_t polen;
     char* po;
 };
 
-void bw2_frameInit(struct bw2frame* frame, const char* cmd, int32_t seqno);
+void bw2_frameInit(struct bw2_frame* frame, const char* cmd, int32_t seqno);
 
-int bw2_readFrame(struct bw2frame* frame, char* frameheap, size_t heapsize, int fd);
-//int bw2_readFrameObject(struct bw2frame* frame, char* frameheap, size_t heapsize, size_t* heapused, int fd);
-struct bw2header* bw2_getFirstHeader(struct bw2frame* frame, const char* key);
+int bw2_readFrame(struct bw2_frame* frame, char* frameheap, size_t heapsize, int fd);
+//int bw2_readFrameObject(struct bw2_frame* frame, char* frameheap, size_t heapsize, size_t* heapused, int fd);
+struct bw2_header* bw2_getFirstHeader(struct bw2_frame* frame, const char* key);
 
-int bw2_frameMustResponse(struct bw2frame* frame);
+int bw2_frameMustResponse(struct bw2_frame* frame);
 
 /* The frameFreeResources function is needed only for frames whose resources are
  * allocated with malloc (i.e., with a NULL frame heap).
  */
-void bw2_frameFreeResources(struct bw2frame* frame);
+void bw2_frameFreeResources(struct bw2_frame* frame);
 
-void bw2_appendKV(struct bw2frame* frame, struct bw2header* kv);
-void bw2_appendPO(struct bw2frame* frame, struct bw2payloadobj* po);
-void bw2_appendRO(struct bw2frame* frame, struct bw2routingobj* ro);
+void bw2_appendKV(struct bw2_frame* frame, struct bw2_header* kv);
+void bw2_appendPO(struct bw2_frame* frame, struct bw2_payloadobj* po);
+void bw2_appendRO(struct bw2_frame* frame, struct bw2_routingobj* ro);
 
-void bw2_KVInit(struct bw2header* hdr, char* key, char* value, size_t valuelen);
-void bw2_POInit(struct bw2payloadobj* po, uint32_t ponum, char* poblob, size_t polen);
-void bw2_ROInit(struct bw2routingobj* ro, uint8_t ronum, char* roblob, size_t rolen);
+void bw2_KVInit(struct bw2_header* hdr, char* key, char* value, size_t valuelen);
+void bw2_POInit(struct bw2_payloadobj* po, uint32_t ponum, char* poblob, size_t polen);
+void bw2_ROInit(struct bw2_routingobj* ro, uint8_t ronum, char* roblob, size_t rolen);
 
-size_t bw2_frameLength(struct bw2frame* frame);
-int bw2_writeFrame(struct bw2frame* frame, int fd);
+size_t bw2_frameLength(struct bw2_frame* frame);
+int bw2_writeFrame(struct bw2_frame* frame, int fd);
 
 
 

@@ -7,7 +7,7 @@
 #include "errors.h"
 #include "utils.h"
 
-int read_until_char(char* arr, size_t maxlen, char until, int fd, size_t* bytesread) {
+int bw2_read_until_char(char* arr, size_t maxlen, char until, int fd, size_t* bytesread) {
     char c;
     if (bytesread != NULL) {
         *bytesread = 0;
@@ -35,7 +35,7 @@ int read_until_char(char* arr, size_t maxlen, char until, int fd, size_t* bytesr
     return BW2_UNTIL_ARRAY_FULL;
 }
 
-int drop_until_char(char until, int fd, size_t* bytesread) {
+int bw2_drop_until_char(char until, int fd, size_t* bytesread) {
     char c;
     if (bytesread != NULL) {
         *bytesread = 0;
@@ -54,7 +54,7 @@ int drop_until_char(char until, int fd, size_t* bytesread) {
     return BW2_UNTIL_CHAR_FOUND;
 }
 
-int read_until_full(char* arr, size_t len, int fd, size_t* bytesread) {
+int bw2_read_until_full(char* arr, size_t len, int fd, size_t* bytesread) {
     if (bytesread != NULL) {
         *bytesread = 0;
     }
@@ -77,7 +77,7 @@ int read_until_full(char* arr, size_t len, int fd, size_t* bytesread) {
 }
 
 
-int drop_full_array(size_t len, int fd, size_t* bytesread) {
+int bw2_drop_full_array(size_t len, int fd, size_t* bytesread) {
     char c;
 
     if (bytesread != NULL) {
@@ -100,7 +100,7 @@ int drop_full_array(size_t len, int fd, size_t* bytesread) {
     return BW2_UNTIL_ARRAY_FULL;
 }
 
-int ponum_from_dot_form(const char* dotform, int32_t* ponum) {
+int bw2_ponum_from_dot_form(const char* dotform, int32_t* ponum) {
     const char* numstr = dotform;
     char* end;
     long long unsigned int first, second, third, fourth;
@@ -135,7 +135,7 @@ int ponum_from_dot_form(const char* dotform, int32_t* ponum) {
     return 0;
 }
 
-int write_full_array(char* arr, size_t len, int fd) {
+int bw2_write_full_array(char* arr, size_t len, int fd) {
     size_t written = 0;
     while (written != len) {
         ssize_t rv = write(fd, arr, len - written);
@@ -147,10 +147,10 @@ int write_full_array(char* arr, size_t len, int fd) {
     return 0;
 }
 
-size_t format_time_rfc3339(char* buf, size_t buflen, struct tm* utctime) {
+size_t bw2_format_time_rfc3339(char* buf, size_t buflen, struct tm* utctime) {
     return strftime(buf, buflen, "%Y-%m-%dT%H:%M:%SZ", utctime);
 }
 
-void format_timedelta(char* buf, size_t buflen, uint64_t timedelta) {
+void bw2_format_timedelta(char* buf, size_t buflen, uint64_t timedelta) {
     snprintf(buf, buflen, "%" PRIu64 "ms", timedelta);
 }
