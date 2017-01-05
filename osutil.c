@@ -38,5 +38,19 @@ int bw2_condDestroy(struct bw2_cond* condvar) {
     return pthread_cond_destroy(&condvar->cond);
 }
 
+int bw2_threadCreate(char* thread_stack, size_t stack_size, void* (*function)(void*), void* arg, int* tid) {
+    (void) thread_stack;
+    (void) stack_size;
+
+    pthread_t pthread_id;
+    int rv = pthread_create(&pthread_id, NULL, function, arg);
+
+    if (tid != NULL) {
+        *tid = (int) pthread_id;
+    }
+
+    return rv;
+}
+
 #elif (OS == RIOT)
 #endif

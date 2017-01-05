@@ -4,6 +4,9 @@
 #include <stdint.h>
 #include <string.h>
 
+#define BW2_MIN(X, Y) ((X) < (Y) ? (X) : (Y))
+#define BW2_MAX(X, Y) ((X) > (Y) ? (X) : (Y))
+
 #define BW2_UNTIL_ARRAY_FULL 2
 #define BW2_UNTIL_EOF_REACHED 1
 #define BW2_UNTIL_CHAR_FOUND 0

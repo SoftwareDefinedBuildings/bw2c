@@ -33,4 +33,8 @@ int bw2_condSignal(struct bw2_cond* condvar);
 int bw2_condBroadcast(struct bw2_cond* condvar);
 int bw2_condDestroy(struct bw2_cond* condvar);
 
+/* Functions for threading. */
+
+int bw2_threadCreate(char* thread_stack, size_t stack_size, void* (*function) (void*), void* arg, int* tid);
+
 #endif
