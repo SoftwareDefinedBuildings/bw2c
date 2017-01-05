@@ -18,8 +18,15 @@ struct bw2frameheader {
     char newline;
 };
 
-void bw2_frameInit(struct bw2frame* frame) {
-    memset(frame, 0x00, sizeof(struct bw2frame));
+void bw2_frameInit(struct bw2frame* frame, const char* cmd, int32_t seqno) {
+    memcpy(frame->cmd, cmd, 4);
+    frame->seqno = seqno;
+    frame->hdrs = NULL;
+    frame->lasthdr = NULL;
+    frame->pos = NULL;
+    frame->lastpo = NULL;
+    frame->ros = NULL;
+    frame->lastro = NULL;
 }
 
 int _bw2_frame_read_KV(struct bw2header** header, char* frameheap, size_t heapsize, size_t* heapused, int fd);
@@ -142,6 +149,21 @@ struct bw2header* bw2_getFirstHeader(struct bw2frame* frame, const char* key) {
     return NULL;
 }
 
+int bw2_frameMustResponse(struct bw2frame* frame) {
+    if (memcmp(frame->cmd, "resp", 4) == 0) {
+        struct bw2header* statushdr = bw2_getFirstHeader(frame, "status");
+        if (statushdr == NULL) {
+            return BW2_ERROR_MISSING_HEADER;
+        } else if (strncmp(statushdr->value, "okay", statushdr->len) == 0) {
+            return 0;
+        } else {
+            return BW2_ERROR_RESPONSE_STATUS;
+        }
+    } else {
+        return BW2_ERROR_UNEXPECTED_FRAME;
+    }
+}
+
 void bw2_frameFreeResources(struct bw2frame* frame) {
     struct bw2header* hcurr, * hnext;
     struct bw2payloadobj* pcurr, * pnext;
@@ -164,54 +186,70 @@ void bw2_frameFreeResources(struct bw2frame* frame) {
 }
 
 void bw2_appendKV(struct bw2frame* frame, struct bw2header* kv) {
-    kv->next = NULL;
     if (frame->lasthdr == NULL) {
         frame->hdrs = kv;
-        frame->lasthdr = kv;
     } else {
         frame->lasthdr->next = kv;
-        frame->lasthdr = kv;
     }
+
+    do {
+        frame->lasthdr = kv;
+        kv = kv->next;
+    } while (kv != NULL);
 }
 
 void bw2_appendPO(struct bw2frame* frame, struct bw2payloadobj* po) {
-    po->next = NULL;
     if (frame->lastpo == NULL) {
         frame->pos = po;
-        frame->lastpo = po;
     } else {
         frame->lastpo->next = po;
-        frame->lastpo = po;
     }
+
+    do {
+        frame->lastpo = po;
+        po = po->next;
+    } while (po != NULL);
 }
 
 void bw2_appendRO(struct bw2frame* frame, struct bw2routingobj* ro) {
-    ro->next = NULL;
     if (frame->lastro == NULL) {
         frame->ros = ro;
-        frame->lastro = ro;
     } else {
         frame->lastro->next = ro;
-        frame->lastro = ro;
     }
+
+    do {
+        frame->lastro = ro;
+        ro = ro->next;
+    } while (ro != NULL);
 }
 
 void bw2_KVInit(struct bw2header* hdr, char* key, char* value, size_t valuelen) {
-    strncpy(hdr->key, key, sizeof(hdr->key));
-    hdr->len = valuelen;
+    hdr->key = key;
+    if (valuelen == 0) {
+        hdr->len = strlen(value);
+    } else {
+        hdr->len = valuelen;
+    }
     hdr->value = value;
+
+    hdr->next = NULL;
 }
 
 void bw2_POInit(struct bw2payloadobj* po, uint32_t ponum, char* poblob, size_t polen) {
     po->ponum = ponum;
     po->polen = polen;
     po->po = poblob;
+
+    po->next = NULL;
 }
 
 void bw2_ROInit(struct bw2routingobj* ro, uint8_t ronum, char* roblob, size_t rolen) {
     ro->ronum = ronum;
     ro->rolen = rolen;
     ro->ro = roblob;
+
+    ro->next = NULL;
 }
 
 size_t _bw2_frame_KV_len(struct bw2header* hdr);
@@ -384,8 +422,10 @@ int _bw2_frame_read_KV(struct bw2header** header, char* frameheap, size_t heapsi
         return rv;
     }
 
+    size_t keylenwithnull = strlen(key) + 1;
+
     size_t vallen = (size_t) strtoull(length, NULL, 10);
-    size_t hdrlen = vallen + sizeof(struct bw2header);
+    size_t hdrlen = sizeof(struct bw2header) + keylenwithnull + vallen;
 
     /* Try to allocate space in the frame's heap, if there was no overflow. */
     struct bw2header* hdr = NULL;
@@ -397,9 +437,10 @@ int _bw2_frame_read_KV(struct bw2header** header, char* frameheap, size_t heapsi
         /* No space... :( */
         rv = drop_full_array(vallen, fd, NULL);
     } else {
-        strncpy(hdr->key, key, BW2_FRAME_MAX_KEY_LENGTH + 1);
+        hdr->key = (char*) (hdr + 1);
+        strncpy(hdr->key, key, keylenwithnull);
         hdr->len = vallen;
-        hdr->value = (char*) (hdr + 1);
+        hdr->value = hdr->key + keylenwithnull;
         rv = read_until_full(hdr->value, vallen, fd, NULL);
     }
 

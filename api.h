@@ -4,6 +4,7 @@
 #include <stdbool.h>
 #include <sys/socket.h>
 #include <sys/types.h>
+#include <time.h>
 
 #define OS LINUX
 
@@ -34,6 +35,36 @@ struct bw2client {
     int32_t curseqno;
 };
 
+#define BW2_ELABORATE_FULL "full"
+#define BW2_ELABORATE_PARTIAL "partial"
+#define BW2_ELABORATE_NONE "none"
+#define BW2_ELABORATE_DEFAULT BW2_ELABORATE_PARTIAL
+
+struct bw2_publishParams {
+    char* uri;
+    char* primaryAccessChain;
+    bool autoChain;
+    struct bw2routingobj* routingObjects;
+    struct bw2payloadobj* payloadObjects;
+    struct tm* expiry;
+    uint64_t expiryDelta;
+    char* elaboratePAC;
+    bool doNotVerify;
+    bool persist;
+};
+
+struct bw2_subscribeParams {
+    char* uri;
+    char* primaryAccessChain;
+    bool autoChain;
+    struct bw2routingobj** routingObjects;
+    struct tm* expiry;
+    uint64_t expiryDelta;
+    char* elaboratePAC;
+    bool doNotVerify;
+    bool persist;
+};
+
 int32_t _bw2_getSeqNo(struct bw2client* client);
 
 void bw2_clientInit(struct bw2client* client);
@@ -41,5 +72,6 @@ void bw2_clientInit(struct bw2client* client);
 /* Returns 0 on success, or some positive errno on failure. */
 int bw2_connect(struct bw2client* client, const struct sockaddr* addr, socklen_t addrlen, char* frameheap, size_t heapsize);
 int bw2_setEntity(struct bw2client* client, char* entity, size_t entitylen, struct bw2_vk* vk);
+int bw2_publish(struct bw2client* client, struct bw2_publishParams* p);
 
 #endif

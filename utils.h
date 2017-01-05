@@ -3,6 +3,7 @@
 
 #include <stdint.h>
 #include <string.h>
+#include <time.h>
 
 #define BW2_MIN(X, Y) ((X) < (Y) ? (X) : (Y))
 #define BW2_MAX(X, Y) ((X) > (Y) ? (X) : (Y))
@@ -36,5 +37,8 @@ int ponum_from_dot_form(const char* dotform, int32_t* ponum);
 /* The following functions do not use the above four error codes. */
 
 int write_full_array(char* arr, size_t len, int fd);
+
+size_t format_time_rfc3339(char* buf, size_t buflen, struct tm* utctime);
+void format_timedelta(char* buf, size_t buflen, uint64_t timedelta);
 
 #endif

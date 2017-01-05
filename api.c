@@ -11,6 +11,7 @@
 #include "frame.h"
 #include "objects.h"
 #include "ponum.h"
+#include "utils.h"
 
 int32_t _bw2_getSeqNo(struct bw2client* client) {
     int32_t seqno;
@@ -66,7 +67,7 @@ int bw2_connect(struct bw2client* client, const struct sockaddr* addr, socklen_t
         goto closeanderror;
     }
 
-    if (memcmp(frame.cmd, "helo", 4) != 0) {
+    if (memcmp(frame.cmd, BW2_FRAME_CMD_HELLO, 4) != 0) {
         rv = BW2_ERROR_UNEXPECTED_FRAME;
         goto closeanderror;
     }
@@ -95,6 +96,23 @@ closeanderror:
     return rv;
 }
 
+struct bw2_simpleReq_ctx {
+    struct bw2_monitor mtr;
+    int rv;
+};
+
+bool _bw2_simpleReq_cb(struct bw2frame* frame, bool final, void* ctx) {
+    (void) final;
+
+    struct bw2_simpleReq_ctx* sreqctx = ctx;
+
+    sreqctx->rv = bw2_frameMustResponse(frame);
+
+    bw2_monitorSignal(&sreqctx->mtr);
+
+    return true;
+}
+
 struct bw2_setEntity_ctx {
     struct bw2_vk* vk;
     struct bw2_monitor mtr;
@@ -113,18 +131,7 @@ bool _bw2_setEntity_cb(struct bw2frame* frame, bool final, void* ctx) {
         }
     }
 
-    if (memcmp(frame->cmd, "resp", 4) == 0) {
-        struct bw2header* statushdr = bw2_getFirstHeader(frame, "status");
-        if (statushdr == NULL) {
-            sectx->rv = BW2_ERROR_MISSING_HEADER;
-        } else if (strncmp(statushdr->value, "okay", statushdr->len) == 0) {
-            sectx->rv = 0;
-        } else {
-            sectx->rv = BW2_ERROR_RESPONSE_STATUS;
-        }
-    } else {
-        sectx->rv = BW2_ERROR_UNEXPECTED_FRAME;
-    }
+    sectx->rv = bw2_frameMustResponse(frame);
 
     bw2_monitorSignal(&sectx->mtr);
 
@@ -133,9 +140,7 @@ bool _bw2_setEntity_cb(struct bw2frame* frame, bool final, void* ctx) {
 
 int bw2_setEntity(struct bw2client* client, char* entity, size_t entitylen, struct bw2_vk* vk) {
     struct bw2frame req;
-    bw2_frameInit(&req);
-
-    memcpy(req.cmd, "sete", sizeof(req.cmd));
+    bw2_frameInit(&req, BW2_FRAME_CMD_SET_ENTITY, _bw2_getSeqNo(client));
 
     struct bw2payloadobj po;
     bw2_POInit(&po, BW2_PONUM_ROENTITYWKEY, entity, entitylen);
@@ -155,4 +160,78 @@ int bw2_setEntity(struct bw2client* client, char* entity, size_t entitylen, stru
     bw2_monitorDestroy(&sectx.mtr);
 
     return sectx.rv;
+}
+
+int bw2_publish(struct bw2client* client, struct bw2_publishParams* p) {
+    struct bw2frame req;
+    if (p->persist) {
+        bw2_frameInit(&req, BW2_FRAME_CMD_PERSIST, _bw2_getSeqNo(client));
+    } else {
+        bw2_frameInit(&req, BW2_FRAME_CMD_PUBLISH, _bw2_getSeqNo(client));
+    }
+    char timeabsbuf[BW2_FRAME_MAX_TIMESTR_LENGTH + 1];
+    char timedeltabuf[BW2_FRAME_MAX_TIME_DIGITS + 4];
+    struct bw2header autochain;
+    struct bw2header expiry;
+    struct bw2header expirydelta;
+    struct bw2header uri;
+    struct bw2header pac;
+    struct bw2header elaboratePAC;
+    struct bw2header doverify;
+    struct bw2header persist;
+    if (p->autoChain) {
+        bw2_KVInit(&autochain, "autochain", "true", 0);
+        bw2_appendKV(&req, &autochain);
+    }
+
+    if (p->expiry != NULL) {
+        format_time_rfc3339(timeabsbuf, sizeof(timeabsbuf), p->expiry);
+        bw2_KVInit(&expiry, "expiry", timeabsbuf, 0);
+        bw2_appendKV(&req, &expiry);
+    }
+
+    if (p->expiryDelta != 0) {
+        format_timedelta(timedeltabuf, sizeof(timedeltabuf), p->expiryDelta);
+        bw2_KVInit(&expirydelta, "expirydelta", timedeltabuf, 0);
+        bw2_appendKV(&req, &expirydelta);
+    }
+
+    bw2_KVInit(&uri, "uri", p->uri, 0);
+    bw2_appendKV(&req, &uri);
+
+    if (p->primaryAccessChain != NULL) {
+        bw2_KVInit(&pac, "primary_access_chain", p->primaryAccessChain, 0);
+        bw2_appendKV(&req, &pac);
+    }
+
+    if (p->routingObjects != NULL) {
+        bw2_appendRO(&req, p->routingObjects);
+    }
+
+    if (p->payloadObjects != NULL) {
+        bw2_appendPO(&req, p->payloadObjects);
+    }
+
+    bw2_KVInit(&elaboratePAC, "elaborate_pac", p->elaboratePAC, 0);
+    bw2_appendKV(&req, &elaboratePAC);
+
+    bw2_KVInit(&doverify, "doverify", p->doNotVerify ? "false" : "true", 0);
+    bw2_appendKV(&req, &doverify);
+
+    bw2_KVInit(&persist, "persist", p->persist ? "true" : "false", 0);
+    bw2_appendKV(&req, &persist);
+
+    struct bw2_simpleReq_ctx pubctx;
+    bw2_monitorInit(&pubctx.mtr);
+
+    struct bw2_reqctx reqctx;
+    reqctx.onframe = _bw2_simpleReq_cb;
+    reqctx.ctx = &pubctx;
+
+    bw2_transact(client, &req, &reqctx);
+
+    bw2_monitorWait(&pubctx.mtr);
+    bw2_monitorDestroy(&pubctx.mtr);
+
+    return pubctx.rv;
 }

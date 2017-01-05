@@ -1,4 +1,6 @@
 #include <errno.h>
+#include <inttypes.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
 
@@ -143,4 +145,12 @@ int write_full_array(char* arr, size_t len, int fd) {
         written += rv;
     }
     return 0;
+}
+
+size_t format_time_rfc3339(char* buf, size_t buflen, struct tm* utctime) {
+    return strftime(buf, buflen, "%Y-%m-%dT%H:%M:%SZ", utctime);
+}
+
+void format_timedelta(char* buf, size_t buflen, uint64_t timedelta) {
+    snprintf(buf, buflen, "%" PRIu64 "ms", timedelta);
 }
