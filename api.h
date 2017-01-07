@@ -12,6 +12,7 @@
 #error "You must #define OS in order to use the BOSSWAVE C bindings"
 #endif
 
+#include "daemon.h"
 #include "frame.h"
 #include "objects.h"
 #include "osutil.h"
@@ -57,21 +58,44 @@ struct bw2_subscribeParams {
     char* uri;
     char* primaryAccessChain;
     bool autoChain;
-    struct bw2_routingobj** routingObjects;
+    struct bw2_routingobj* routingObjects;
     struct tm* expiry;
     uint64_t expiryDelta;
     char* elaboratePAC;
     bool doNotVerify;
-    bool persist;
+    bool leavePacked;
+};
+
+struct bw2_simpleMessage {
+    /* The FROM and URI arrays are not null-terminated. */
+
+    char* from;
+    size_t from_len;
+
+    char* uri;
+    size_t uri_len;
+
+    struct bw2_payloadobj* pos;
+    struct bw2_routingobj* ros;
+
+    int error;
+};
+
+struct bw2_subscribe_ctx {
+    /* The user sets this element. */
+    bool (*on_message)(struct bw2_simpleMessage* sm);
+
+    /* The remaining elements are used internally by the bindings. */
+    struct bw2_reqctx reqctx;
 };
 
 int32_t _bw2_getSeqNo(struct bw2_client* client);
 
 void bw2_clientInit(struct bw2_client* client);
 
-/* Returns 0 on success, or some positive errno on failure. */
 int bw2_connect(struct bw2_client* client, const struct sockaddr* addr, socklen_t addrlen, char* frameheap, size_t heapsize);
 int bw2_setEntity(struct bw2_client* client, char* entity, size_t entitylen, struct bw2_vk* vk);
 int bw2_publish(struct bw2_client* client, struct bw2_publishParams* p);
+int bw2_subscribe(struct bw2_client* client, struct bw2_subscribeParams* p, struct bw2_subscribe_ctx* subctx);
 
 #endif

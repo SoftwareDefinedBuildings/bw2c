@@ -23,7 +23,7 @@ void bw2_daemon(struct bw2_client* client, char* frameheap, size_t heapsize) {
                 struct bw2_reqctx* next = curr->next;
 
                 bool final = (finishhdr != NULL && strcmp(finishhdr->value, "true") == 0);
-                bool stoplistening = curr->onframe(&frame, final, curr->ctx);
+                bool stoplistening = curr->onframe(&frame, final, curr, curr->ctx);
 
                 if (final || stoplistening) {
                     /* At this point, curr may no longer be a valid pointer. */
@@ -68,45 +68,56 @@ int bw2_transact(struct bw2_client* client, struct bw2_frame* frame, struct bw2_
     return 0;
 }
 
-int bw2_monitorInit(struct bw2_monitor* mtr) {
-    bw2_mutexInit(&mtr->lock);
-    bw2_condInit(&mtr->condvar);
-    mtr->ready = false;
+int bw2_reqctxInit(struct bw2_reqctx* rctx, bool (*onframe)(struct bw2_frame*, bool, struct bw2_reqctx*, void*), void* ctx) {
+    rctx->onframe = onframe;
+    rctx->ctx = ctx;
+
+    bw2_mutexInit(&rctx->lock);
+    bw2_condInit(&rctx->condvar);
+    rctx->ready = false;
 
     return 0;
-};
+}
 
-int bw2_monitorWait(struct bw2_monitor* mtr) {
-    bw2_mutexLock(&mtr->lock);
-    while (!mtr->ready) {
-        bw2_condWait(&mtr->condvar, &mtr->lock);
+int bw2_reqctxWait(struct bw2_reqctx* rctx) {
+    bw2_mutexLock(&rctx->lock);
+    while (!rctx->ready) {
+        bw2_condWait(&rctx->condvar, &rctx->lock);
     }
-    bw2_mutexUnlock(&mtr->lock);
+    bw2_mutexUnlock(&rctx->lock);
 
     return 0;
 }
 
-int bw2_monitorSignal(struct bw2_monitor* mtr) {
-    bw2_mutexLock(&mtr->lock);
-    mtr->ready = true;
-    bw2_condSignal(&mtr->condvar);
-    bw2_mutexUnlock(&mtr->lock);
+int bw2_reqctxSignalled(struct bw2_reqctx* rctx, bool* signalled) {
+    bw2_mutexLock(&rctx->lock);
+    *signalled = rctx->ready;
+    bw2_mutexUnlock(&rctx->lock);
 
     return 0;
 }
 
-int bw2_monitorBroadcast(struct bw2_monitor* mtr) {
-    bw2_mutexLock(&mtr->lock);
-    mtr->ready = true;
-    bw2_condBroadcast(&mtr->condvar);
-    bw2_mutexUnlock(&mtr->lock);
+int bw2_reqctxSignal(struct bw2_reqctx* rctx) {
+    bw2_mutexLock(&rctx->lock);
+    rctx->ready = true;
+    bw2_condSignal(&rctx->condvar);
+    bw2_mutexUnlock(&rctx->lock);
 
     return 0;
 }
 
-int bw2_monitorDestroy(struct bw2_monitor* mtr) {
-    bw2_mutexDestroy(&mtr->lock);
-    bw2_condDestroy(&mtr->condvar);
+int bw2_reqctxBroadcast(struct bw2_reqctx* rctx) {
+    bw2_mutexLock(&rctx->lock);
+    rctx->ready = true;
+    bw2_condBroadcast(&rctx->condvar);
+    bw2_mutexUnlock(&rctx->lock);
+
+    return 0;
+}
+
+int bw2_reqctxDestroy(struct bw2_reqctx* rctx) {
+    bw2_mutexDestroy(&rctx->lock);
+    bw2_condDestroy(&rctx->condvar);
 
     return 0;
 }
