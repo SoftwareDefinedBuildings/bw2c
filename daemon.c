@@ -22,7 +22,7 @@ void bw2_daemon(struct bw2_client* client, char* frameheap, size_t heapsize) {
 
                 struct bw2_reqctx* next = curr->next;
 
-                bool final = (finishhdr != NULL && strcmp(finishhdr->value, "true") == 0);
+                bool final = (finishhdr != NULL && strncmp(finishhdr->value, "true", finishhdr->len) == 0);
                 bool stoplistening = curr->onframe(&frame, final, curr, curr->ctx);
 
                 if (final || stoplistening) {

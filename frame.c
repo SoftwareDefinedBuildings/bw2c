@@ -472,7 +472,7 @@ int _bw2_frame_read_PO(struct bw2_payloadobj** pobj, char* frameheap, size_t hea
     }
 
     uint32_t ponum;
-    const char* colon = strchr(ponumstr, ':');
+    char* colon = strchr(ponumstr, ':');
     if (ponumstr == colon) {
         errno = 0;
         ponum = (uint32_t) strtoull(&ponumstr[1], NULL, 10);
@@ -480,6 +480,7 @@ int _bw2_frame_read_PO(struct bw2_payloadobj** pobj, char* frameheap, size_t hea
             return BW2_ERROR_MALFORMED_FRAME;
         }
     } else {
+        *colon = '\0';
         rv = bw2_ponum_from_dot_form(ponumstr, &ponum);
         if (rv != 0) {
             return BW2_ERROR_MALFORMED_FRAME;

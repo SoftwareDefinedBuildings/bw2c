@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include <sys/socket.h>
@@ -31,18 +32,30 @@ void bw2_clientInit(struct bw2_client* client) {
     bw2_mutexInit(&client->seqnolock);
 }
 
-struct bw2_daemon_args {
+struct bw2_daemon_info {
     struct bw2_client* client;
     size_t heapsize;
+    bool has_heap;
 };
 
 void* _bw2_daemon_trampoline(void* arg) {
-    char* frameheap = arg;
+    struct bw2_daemon_info* info = arg;
 
-    /* The daemon args are stored in the frame heap itself. */
-    struct bw2_daemon_args* args = arg;
+    char* frameheap;
 
-    bw2_daemon(args->client, frameheap, args->heapsize);
+    struct bw2_client* client = info->client;
+    size_t heapsize = info->heapsize;
+
+    if (info->has_heap) {
+        /* The daemon args are stored in the frame heap itself. */
+        frameheap = arg;
+    } else {
+        /* No heap was provided, so we fall back to malloc. */
+        frameheap = NULL;
+        free(info);
+    }
+
+    bw2_daemon(client, frameheap, heapsize);
 
     return NULL;
 }
@@ -80,11 +93,23 @@ int bw2_connect(struct bw2_client* client, const struct sockaddr* addr, socklen_
 
     printf("Connected to BOSSWAVE router version %.*s\n", (int) versionhdr->len, versionhdr->value);
 
-    struct bw2_daemon_args* dargs = (struct bw2_daemon_args*) frameheap;
+    if (frameheap == NULL) {
+        /* The frame was actually malloc'd, so we need to free it... */
+        bw2_frameFreeResources(&frame);
+    }
+
+    struct bw2_daemon_info* dargs;
+    if (frameheap != NULL) {
+        dargs = (struct bw2_daemon_info*) frameheap;
+        dargs->has_heap = true;
+    } else {
+        dargs = malloc(sizeof(struct bw2_daemon_info));
+        dargs->has_heap = false;
+    }
     dargs->client = client;
     dargs->heapsize = heapsize;
 
-    rv = bw2_threadCreate(NULL, 0, _bw2_daemon_trampoline, frameheap, NULL);
+    rv = bw2_threadCreate(NULL, 0, _bw2_daemon_trampoline, dargs, NULL);
     if (rv != 0) {
         goto closeanderror;
     }
@@ -257,7 +282,7 @@ bool _bw2_subscribe_cb(struct bw2_frame* frame, bool final, struct bw2_reqctx* r
 
             struct bw2_header* fromhdr = bw2_getFirstHeader(frame, "from");
             struct bw2_header* urihdr = bw2_getFirstHeader(frame, "uri");
-            if (fromhdr == NULL || urihdr == NULL) {
+            if (fromhdr != NULL && urihdr != NULL) {
                 sm.from = fromhdr->value;
                 sm.from_len = fromhdr->len;
                 sm.uri = urihdr->value;
@@ -289,7 +314,6 @@ bool _bw2_subscribe_cb(struct bw2_frame* frame, bool final, struct bw2_reqctx* r
         return stopListening;
     }
 }
-
 
 int bw2_subscribe(struct bw2_client* client, struct bw2_subscribeParams* p, struct bw2_subscribe_ctx* subctx) {
     struct bw2_frame req;

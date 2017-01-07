@@ -67,7 +67,7 @@ struct bw2_subscribeParams {
 };
 
 struct bw2_simpleMessage {
-    /* The FROM and URI arrays are not null-terminated. */
+    /* The FROM and URI arrays are not null-terminated, so be careful. */
 
     char* from;
     size_t from_len;
