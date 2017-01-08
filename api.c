@@ -178,20 +178,18 @@ int bw2_setEntity(struct bw2_client* client, char* entity, size_t entitylen, str
 
 #define BW2_REQUEST_ADD_EXPIRY(PARAMPTR, REQPTR) \
     struct bw2_header expiry; \
-    char timeabsbuf[BW2_FRAME_MAX_TIMESTR_LENGTH + 1]; \
+    union { \
+        char timeabsbuf[BW2_FRAME_MAX_TIMESTR_LENGTH + 1]; \
+        char timedeltabuf[BW2_FRAME_MAX_TIME_DIGITS + 4]; \
+    } timebuf; \
     if ((PARAMPTR)->expiry != NULL) { \
-        bw2_format_time_rfc3339(timeabsbuf, sizeof(timeabsbuf), (PARAMPTR)->expiry); \
-        bw2_KVInit(&expiry, "expiry", timeabsbuf, 0); \
+        bw2_format_time_rfc3339(timebuf.timeabsbuf, sizeof(timebuf.timeabsbuf), (PARAMPTR)->expiry); \
+        bw2_KVInit(&expiry, "expiry", timebuf.timeabsbuf, 0); \
         bw2_appendKV(REQPTR, &expiry); \
-    }
-
-#define BW2_REQUEST_ADD_EXPIRYDELTA(PARAMPTR, REQPTR) \
-    struct bw2_header expirydelta; \
-    char timedeltabuf[BW2_FRAME_MAX_TIME_DIGITS + 4]; \
-    if ((PARAMPTR)->expiryDelta != 0) { \
-        bw2_format_timedelta(timedeltabuf, sizeof(timedeltabuf), (PARAMPTR)->expiryDelta); \
-        bw2_KVInit(&expirydelta, "expirydelta", timedeltabuf, 0); \
-        bw2_appendKV(REQPTR, &expirydelta); \
+    } else if ((PARAMPTR)->expiryDelta != 0) { \
+        bw2_format_timedelta(timebuf.timedeltabuf, sizeof(timebuf.timedeltabuf), (PARAMPTR)->expiryDelta); \
+        bw2_KVInit(&expiry, "expirydelta", timebuf.timedeltabuf, 0); \
+        bw2_appendKV(REQPTR, &expiry); \
     }
 
 #define BW2_REQUEST_ADD_URI(PARAMPTR, REQPTR) \
@@ -248,7 +246,6 @@ int bw2_publish(struct bw2_client* client, struct bw2_publishParams* p) {
 
     BW2_REQUEST_ADD_AUTOCHAIN(p, &req)
     BW2_REQUEST_ADD_EXPIRY(p, &req)
-    BW2_REQUEST_ADD_EXPIRYDELTA(p, &req)
     BW2_REQUEST_ADD_URI(p, &req)
     BW2_REQUEST_ADD_PRIMARY_ACCESS_CHAIN(p, &req)
     BW2_REQUEST_ADD_ROUTING_OBJECTS(p, &req)
@@ -316,7 +313,6 @@ int bw2_subscribe(struct bw2_client* client, struct bw2_subscribeParams* p, stru
 
     BW2_REQUEST_ADD_AUTOCHAIN(p, &req)
     BW2_REQUEST_ADD_EXPIRY(p, &req)
-    BW2_REQUEST_ADD_EXPIRYDELTA(p, &req)
     BW2_REQUEST_ADD_URI(p, &req)
     BW2_REQUEST_ADD_PRIMARY_ACCESS_CHAIN(p, &req)
     BW2_REQUEST_ADD_ROUTING_OBJECTS(p, &req)
@@ -341,7 +337,6 @@ int bw2_query(struct bw2_client* client, struct bw2_queryParams* p, struct bw2_s
 
     BW2_REQUEST_ADD_AUTOCHAIN(p, &req)
     BW2_REQUEST_ADD_EXPIRY(p, &req)
-    BW2_REQUEST_ADD_EXPIRYDELTA(p, &req)
     BW2_REQUEST_ADD_URI(p, &req)
     BW2_REQUEST_ADD_PRIMARY_ACCESS_CHAIN(p, &req)
     BW2_REQUEST_ADD_ROUTING_OBJECTS(p, &req)
@@ -397,7 +392,6 @@ int bw2_list(struct bw2_client* client, struct bw2_listParams* p, struct bw2_cha
 
     BW2_REQUEST_ADD_AUTOCHAIN(p, &req)
     BW2_REQUEST_ADD_EXPIRY(p, &req)
-    BW2_REQUEST_ADD_EXPIRYDELTA(p, &req)
     BW2_REQUEST_ADD_URI(p, &req)
     BW2_REQUEST_ADD_PRIMARY_ACCESS_CHAIN(p, &req)
     BW2_REQUEST_ADD_ROUTING_OBJECTS(p, &req)
