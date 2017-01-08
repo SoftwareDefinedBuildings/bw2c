@@ -6,12 +6,6 @@
 #include <sys/types.h>
 #include <time.h>
 
-#define OS LINUX
-
-#ifndef OS
-#error "You must #define OS in order to use the BOSSWAVE C bindings"
-#endif
-
 #include "daemon.h"
 #include "frame.h"
 #include "objects.h"

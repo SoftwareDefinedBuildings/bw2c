@@ -1,6 +1,9 @@
 #ifndef OSUTIL_H
 #define OSUTIL_H
 
+#define LINUX 0
+#define RIOT 1
+
 #define OS LINUX
 
 #if (OS == LINUX)
@@ -16,6 +19,17 @@ struct bw2_cond {
 };
 
 #elif (OS == RIOT)
+
+#include <condition.h>
+#include <mutex.h>
+
+struct bw2_mutex {
+    mutex_t mutex;
+};
+
+struct bw2_cond {
+    condition_t cond;
+};
 
 #else
 #error "OS must be #define'd to LINUX or RIOT"
@@ -35,6 +49,6 @@ int bw2_condDestroy(struct bw2_cond* condvar);
 
 /* Functions for threading. */
 
-int bw2_threadCreate(char* thread_stack, size_t stack_size, void* (*function) (void*), void* arg, int* tid);
+int bw2_threadCreate(char* thread_stack, int stack_size, void* (*function) (void*), void* arg, int* tid);
 
 #endif
