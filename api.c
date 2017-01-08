@@ -11,7 +11,7 @@
 #include "errors.h"
 #include "frame.h"
 #include "objects.h"
-#include "ponum.h"
+#include "ponames.h"
 #include "utils.h"
 
 int32_t _bw2_getSeqNo(struct bw2_client* client) {
@@ -155,7 +155,7 @@ int bw2_setEntity(struct bw2_client* client, char* entity, size_t entitylen, str
     bw2_frameInit(&req, BW2_FRAME_CMD_SET_ENTITY, _bw2_getSeqNo(client));
 
     struct bw2_payloadobj po;
-    bw2_POInit(&po, BW2_PONUM_ROENTITYWKEY, entity, entitylen);
+    bw2_POInit(&po, BW2_PO_NUM_ROENTITYWKEY, entity, entitylen);
     bw2_appendPO(&req, &po);
 
     struct bw2_reqctx reqctx;
