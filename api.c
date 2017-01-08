@@ -171,7 +171,7 @@ int bw2_setEntity(struct bw2_client* client, char* entity, size_t entitylen, str
 
 #define BW2_REQUEST_ADD_AUTOCHAIN(PARAMPTR, REQPTR) \
     struct bw2_header autochain; \
-    if ((PARAMPTR)->autoChain) { \
+    if ((PARAMPTR)->autochain) { \
         bw2_KVInit(&autochain, "autochain", "true", 0); \
         bw2_appendKV((REQPTR), &autochain); \
     }
@@ -268,54 +268,49 @@ int bw2_publish(struct bw2_client* client, struct bw2_publishParams* p) {
     return reqctx.rv;
 }
 
-bool _bw2_subscribe_cb(struct bw2_frame* frame, bool final, struct bw2_reqctx* rctx, void* ctx) {
-    (void) final;
+void _bw2_simplemsg_from_frame(struct bw2_simpleMessage* sm, struct bw2_frame* frame) {
+    struct bw2_header* fromhdr = bw2_getFirstHeader(frame, "from");
+    struct bw2_header* urihdr = bw2_getFirstHeader(frame, "uri");
+    if (fromhdr != NULL && urihdr != NULL) {
+        sm->from = fromhdr->value;
+        sm->from_len = fromhdr->len;
+        sm->uri = urihdr->value;
+        sm->uri_len = urihdr->len;
+        sm->error = BW2_ERROR_MISSING_HEADER;
+    } else {
+        sm->from = NULL;
+        sm->from_len = 0;
+        sm->uri = NULL;
+        sm->uri_len = 0;
+        sm->error = 0;
+    }
 
+    sm->pos = frame->pos;
+    sm->ros = frame->ros;
+}
+
+bool _bw2_simpleMessage_cb(struct bw2_frame* frame, bool final, struct bw2_reqctx* rctx, void* ctx) {
     bool gotResp;
     bw2_reqctxSignalled(rctx, &gotResp);
 
     if (gotResp) {
         /* Deliver this frame to the application via the on_message function. */
-        struct bw2_subscribe_ctx* subctx = ctx;
-        if (subctx->on_message != NULL) {
+        struct bw2_simplemsg_ctx* smctx = ctx;
+        if (smctx->on_message != NULL) {
             struct bw2_simpleMessage sm;
-
-            struct bw2_header* fromhdr = bw2_getFirstHeader(frame, "from");
-            struct bw2_header* urihdr = bw2_getFirstHeader(frame, "uri");
-            if (fromhdr != NULL && urihdr != NULL) {
-                sm.from = fromhdr->value;
-                sm.from_len = fromhdr->len;
-                sm.uri = urihdr->value;
-                sm.uri_len = urihdr->len;
-                sm.error = BW2_ERROR_MISSING_HEADER;
-            } else {
-                sm.from = NULL;
-                sm.from_len = 0;
-                sm.uri = NULL;
-                sm.uri_len = 0;
-                sm.error = 0;
-            }
-
-            sm.pos = frame->pos;
-            sm.ros = frame->ros;
-
-            subctx->on_message(&sm);
+            _bw2_simplemsg_from_frame(&sm, frame);
+            return smctx->on_message(&sm, final);
         }
         return false;
     } else {
         /* This should be the RESP frame. */
-        bool stopListening = false;
         rctx->rv = bw2_frameMustResponse(frame);
-        if (rctx->rv != 0) {
-            stopListening = true;
-        }
         bw2_reqctxSignal(rctx);
-
-        return stopListening;
+        return (rctx->rv != 0);
     }
 }
 
-int bw2_subscribe(struct bw2_client* client, struct bw2_subscribeParams* p, struct bw2_subscribe_ctx* subctx) {
+int bw2_subscribe(struct bw2_client* client, struct bw2_subscribeParams* p, struct bw2_simplemsg_ctx* subctx) {
     struct bw2_frame req;
     bw2_frameInit(&req, BW2_FRAME_CMD_SUBSCRIBE, _bw2_getSeqNo(client));
 
@@ -329,10 +324,8 @@ int bw2_subscribe(struct bw2_client* client, struct bw2_subscribeParams* p, stru
     BW2_REQUEST_ADD_LEAVE_PACKED(p, &req)
     BW2_REQUEST_ADD_VERIFY(p, &req)
 
-    bw2_reqctxInit(&subctx->reqctx, _bw2_subscribe_cb, subctx);
-
+    bw2_reqctxInit(&subctx->reqctx, _bw2_simpleMessage_cb, subctx);
     bw2_transact(client, &req, &subctx->reqctx);
-
     bw2_reqctxWait(&subctx->reqctx);
 
     /* Don't destroy the reqctx, since the subscription lasts after this
@@ -340,4 +333,84 @@ int bw2_subscribe(struct bw2_client* client, struct bw2_subscribeParams* p, stru
      */
 
     return subctx->reqctx.rv;
+}
+
+int bw2_query(struct bw2_client* client, struct bw2_queryParams* p, struct bw2_simplemsg_ctx* qctx) {
+    struct bw2_frame req;
+    bw2_frameInit(&req, BW2_FRAME_CMD_QUERY, _bw2_getSeqNo(client));
+
+    BW2_REQUEST_ADD_AUTOCHAIN(p, &req)
+    BW2_REQUEST_ADD_EXPIRY(p, &req)
+    BW2_REQUEST_ADD_EXPIRYDELTA(p, &req)
+    BW2_REQUEST_ADD_URI(p, &req)
+    BW2_REQUEST_ADD_PRIMARY_ACCESS_CHAIN(p, &req)
+    BW2_REQUEST_ADD_ROUTING_OBJECTS(p, &req)
+    BW2_REQUEST_ADD_ELABORATE_PAC(p, &req)
+    BW2_REQUEST_ADD_LEAVE_PACKED(p, &req)
+    BW2_REQUEST_ADD_VERIFY(p, &req)
+
+    bw2_reqctxInit(&qctx->reqctx, _bw2_simpleMessage_cb, qctx);
+    bw2_transact(client, &req, &qctx->reqctx);
+    bw2_reqctxWait(&qctx->reqctx);
+
+    /* Don't destroy the reqctx, since we may continue to get results for some
+     * time after this function returns.
+     */
+
+    return qctx->reqctx.rv;
+}
+
+bool _bw2_list_cb(struct bw2_frame* frame, bool final, struct bw2_reqctx* rctx, void* ctx) {
+    bool gotResp;
+    bw2_reqctxSignalled(rctx, &gotResp);
+
+    if (gotResp) {
+        /* Deliver this frame to the application via the on_message function. */
+        struct bw2_chararr_ctx* lctx = ctx;
+        if (lctx->on_message != NULL) {
+            struct bw2_simpleMessage sm;
+            struct bw2_header* childhdr = bw2_getFirstHeader(frame, "child");
+
+            char* childuri;
+            size_t childuri_len;
+            if (childhdr == NULL) {
+                childuri = NULL;
+                childuri_len = 0;
+            } else {
+                childuri = childhdr->value;
+                childuri_len = childhdr->len;
+            }
+            return lctx->on_message(childuri, childuri_len, final);
+        }
+        return false;
+    } else {
+        /* This should be the RESP frame. */
+        rctx->rv = bw2_frameMustResponse(frame);
+        bw2_reqctxSignal(rctx);
+        return (rctx->rv != 0);
+    }
+}
+
+int bw2_list(struct bw2_client* client, struct bw2_listParams* p, struct bw2_chararr_ctx* lctx) {
+    struct bw2_frame req;
+    bw2_frameInit(&req, BW2_FRAME_CMD_LIST, _bw2_getSeqNo(client));
+
+    BW2_REQUEST_ADD_AUTOCHAIN(p, &req)
+    BW2_REQUEST_ADD_EXPIRY(p, &req)
+    BW2_REQUEST_ADD_EXPIRYDELTA(p, &req)
+    BW2_REQUEST_ADD_URI(p, &req)
+    BW2_REQUEST_ADD_PRIMARY_ACCESS_CHAIN(p, &req)
+    BW2_REQUEST_ADD_ROUTING_OBJECTS(p, &req)
+    BW2_REQUEST_ADD_ELABORATE_PAC(p, &req)
+    BW2_REQUEST_ADD_VERIFY(p, &req)
+
+    bw2_reqctxInit(&lctx->reqctx, _bw2_list_cb, lctx);
+    bw2_transact(client, &req, &lctx->reqctx);
+    bw2_reqctxWait(&lctx->reqctx);
+
+    /* Don't destroy the reqctx, since we may continue to get results for some
+     * time after this function returns.
+     */
+
+    return lctx->reqctx.rv;
 }
