@@ -1,10 +1,13 @@
+#include <errno.h>
 #include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/types.h>
+#include <unistd.h>
 
 #include "api.h"
 #include "daemon.h"
+#include "errors.h"
 #include "frame.h"
 #include "osutil.h"
 
@@ -13,12 +16,33 @@ void bw2_daemon(struct bw2_client* client, char* frameheap, size_t heapsize) {
     int rv;
     while (true) {
         rv = bw2_readFrame(&frame, frameheap, heapsize, client->connfd);
-        if (rv != 0) {
-            return;
-        }
+
+        bw2_mutexLock(&client->reqslock);
 
         struct bw2_reqctx** currptr = &client->reqs;
         struct bw2_reqctx* curr = *currptr;
+
+        if (rv != 0 || client->status == BW2_ERROR_CONNECTION_LOST) {
+            /* Mark the client as disconnected so that future requests can just
+             * fail immediately.
+             */
+            if (client->status != BW2_ERROR_CONNECTION_LOST) {
+                close(client->connfd);
+                client->status = BW2_ERROR_CONNECTION_LOST;
+            }
+
+            /* Release all resources and close the socket. */
+            while (curr != NULL) {
+                curr->rv = BW2_ERROR_CONNECTION_LOST;
+                curr->onframe(NULL, true, curr, curr->ctx);
+            }
+            client->reqs = NULL;
+
+            bw2_mutexUnlock(&client->reqslock);
+
+            return;
+        }
+
         while (curr != NULL) {
             if (curr->seqno == frame.seqno) {
                 struct bw2_header* finishhdr = bw2_getFirstHeader(&frame, "finished");
@@ -26,14 +50,12 @@ void bw2_daemon(struct bw2_client* client, char* frameheap, size_t heapsize) {
                 struct bw2_reqctx* next = curr->next;
 
                 bool final = (finishhdr != NULL && strncmp(finishhdr->value, "true", finishhdr->len) == 0);
+                curr->rv = 0; // Normal frame
                 bool stoplistening = curr->onframe(&frame, final, curr, curr->ctx);
 
                 if (final || stoplistening) {
                     /* At this point, curr may no longer be a valid pointer. */
-
-                    bw2_mutexLock(&client->reqslock);
                     *currptr = next;
-                    bw2_mutexUnlock(&client->reqslock);
                 } else {
                     currptr = &curr->next;
                 }
@@ -45,6 +67,8 @@ void bw2_daemon(struct bw2_client* client, char* frameheap, size_t heapsize) {
             curr = *currptr;
         }
 
+        bw2_mutexUnlock(&client->reqslock);
+
         /* If frameheap == NULL, the frame headers/POs/ROs were allocated
          * with malloc, so we need to free all of the allocated resources.
          */
@@ -55,18 +79,35 @@ void bw2_daemon(struct bw2_client* client, char* frameheap, size_t heapsize) {
 }
 
 int bw2_transact(struct bw2_client* client, struct bw2_frame* frame, struct bw2_reqctx* reqctx) {
+    int rv;
+
     if (reqctx != NULL) {
         reqctx->seqno = frame->seqno;
 
         bw2_mutexLock(&client->reqslock);
+
+        if (client->status == BW2_ERROR_CONNECTION_LOST) {
+            bw2_mutexUnlock(&client->reqslock);
+            return BW2_ERROR_CONNECTION_LOST;
+        }
+
         reqctx->next = client->reqs;
         client->reqs = reqctx;
         bw2_mutexUnlock(&client->reqslock);
     }
 
     bw2_mutexLock(&client->outlock);
-    bw2_writeFrame(frame, client->connfd);
+    rv = bw2_writeFrame(frame, client->connfd);
     bw2_mutexUnlock(&client->outlock);
+
+    if (rv == -1 && (errno == ETIMEDOUT || errno == ECONNRESET
+                        || errno == ECONNREFUSED || errno == EBADF)) {
+        bw2_mutexLock(&client->reqslock);
+        close(client->connfd);
+        client->status = BW2_ERROR_CONNECTION_LOST;
+        bw2_mutexUnlock(&client->reqslock);
+        return BW2_ERROR_CONNECTION_LOST;
+    }
 
     return 0;
 }

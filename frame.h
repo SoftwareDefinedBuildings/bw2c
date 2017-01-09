@@ -96,7 +96,6 @@ struct bw2_payloadobj {
 void bw2_frameInit(struct bw2_frame* frame, const char* cmd, int32_t seqno);
 
 int bw2_readFrame(struct bw2_frame* frame, char* frameheap, size_t heapsize, int fd);
-//int bw2_readFrameObject(struct bw2_frame* frame, char* frameheap, size_t heapsize, size_t* heapused, int fd);
 struct bw2_header* bw2_getFirstHeader(struct bw2_frame* frame, const char* key);
 
 int bw2_frameMustResponse(struct bw2_frame* frame);

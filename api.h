@@ -28,6 +28,8 @@ struct bw2_client {
 
     struct bw2_mutex seqnolock;
     int32_t curseqno;
+
+    int status;
 };
 
 #define BW2_ELABORATE_FULL "full"
@@ -148,7 +150,7 @@ struct bw2_simpleChain {
 
 struct bw2_simplemsg_ctx {
     /* The user sets this element. */
-    bool (*on_message)(struct bw2_simpleMessage* sm, bool final);
+    bool (*on_message)(struct bw2_simpleMessage* sm, bool final, int error);
 
     /* The remaining elements are used internally by the bindings. */
     struct bw2_reqctx reqctx;
@@ -156,7 +158,7 @@ struct bw2_simplemsg_ctx {
 
 struct bw2_chararr_ctx {
     /* The user sets this element. */
-    bool (*on_message)(char* arr, size_t arrlen, bool final);
+    bool (*on_message)(char* arr, size_t arrlen, bool final, int error);
 
     /* The remaining elements are used internally by the bindings. */
     struct bw2_reqctx reqctx;
@@ -164,7 +166,7 @@ struct bw2_chararr_ctx {
 
 struct bw2_simplechain_ctx {
     /* The user sets this element. */
-    bool (*on_chain)(struct bw2_simpleChain* sc, bool final);
+    bool (*on_chain)(struct bw2_simpleChain* sc, bool final, int error);
 
     /* The remaining elements are used internally by the bindings. */
     struct bw2_reqctx reqctx;

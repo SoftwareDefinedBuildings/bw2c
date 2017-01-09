@@ -256,7 +256,10 @@ bool _bw2_simpleReq_cb(struct bw2_frame* frame, bool final, struct bw2_reqctx* r
     (void) final;
     (void) ctx;
 
-    rctx->rv = bw2_frameMustResponse(frame);
+    if (frame != NULL) {
+        rctx->rv = bw2_frameMustResponse(frame);
+    }
+
     bw2_reqctxSignal(rctx);
 
     return true;
@@ -265,16 +268,17 @@ bool _bw2_simpleReq_cb(struct bw2_frame* frame, bool final, struct bw2_reqctx* r
 bool _bw2_setEntity_cb(struct bw2_frame* frame, bool final, struct bw2_reqctx* rctx, void* ctx) {
     (void) final;
 
-    struct bw2_vkHash* vkhash = ctx;
+    if (frame != NULL) {
+        struct bw2_vkHash* vkhash = ctx;
 
-    if (vkhash != NULL) {
-        struct bw2_header* vkhdr = bw2_getFirstHeader(frame, "vk");
-        if (vkhdr != NULL) {
-            bw2_vkHash_set(vkhash, vkhdr->value, vkhdr->len);
+        if (vkhash != NULL) {
+            struct bw2_header* vkhdr = bw2_getFirstHeader(frame, "vk");
+            if (vkhdr != NULL) {
+                bw2_vkHash_set(vkhash, vkhdr->value, vkhdr->len);
+            }
         }
+        rctx->rv = bw2_frameMustResponse(frame);
     }
-
-    rctx->rv = bw2_frameMustResponse(frame);
 
     bw2_reqctxSignal(rctx);
 
@@ -292,12 +296,17 @@ int bw2_setEntity(struct bw2_client* client, char* entity, size_t entitylen, str
     struct bw2_reqctx reqctx;
     bw2_reqctxInit(&reqctx, _bw2_setEntity_cb, vkhash);
 
-    bw2_transact(client, &req, &reqctx);
+    int rv = bw2_transact(client, &req, &reqctx);
+    if (rv != 0) {
+        goto done;
+    }
 
     bw2_reqctxWait(&reqctx);
-    bw2_reqctxDestroy(&reqctx);
+    rv = reqctx.rv;
 
-    return reqctx.rv;
+done:
+    bw2_reqctxDestroy(&reqctx);
+    return rv;
 }
 
 int bw2_publish(struct bw2_client* client, struct bw2_publishParams* p) {
@@ -321,12 +330,17 @@ int bw2_publish(struct bw2_client* client, struct bw2_publishParams* p) {
     struct bw2_reqctx reqctx;
     bw2_reqctxInit(&reqctx, _bw2_simpleReq_cb, NULL);
 
-    bw2_transact(client, &req, &reqctx);
+    int rv = bw2_transact(client, &req, &reqctx);
+    if (rv != 0) {
+        goto done;
+    }
 
     bw2_reqctxWait(&reqctx);
-    bw2_reqctxDestroy(&reqctx);
+    rv = reqctx.rv;
 
-    return reqctx.rv;
+done:
+    bw2_reqctxDestroy(&reqctx);
+    return rv;
 }
 
 void _bw2_simplemsg_from_frame(struct bw2_simpleMessage* sm, struct bw2_frame* frame) {
@@ -357,15 +371,22 @@ bool _bw2_simpleMessage_cb(struct bw2_frame* frame, bool final, struct bw2_reqct
     if (gotResp) {
         /* Deliver this frame to the application via the on_message function. */
         struct bw2_simplemsg_ctx* smctx = ctx;
-        if (smctx->on_message != NULL) {
+        if (frame == NULL) {
+            if (smctx->on_message != NULL) {
+                smctx->on_message(NULL, final, rctx->rv);
+            }
+            return true;
+        } else if (smctx->on_message != NULL) {
             struct bw2_simpleMessage sm;
             _bw2_simplemsg_from_frame(&sm, frame);
-            return smctx->on_message(&sm, final);
+            return smctx->on_message(&sm, final, 0);
         }
         return false;
     } else {
         /* This should be the RESP frame. */
-        rctx->rv = bw2_frameMustResponse(frame);
+        if (frame != NULL) {
+            rctx->rv = bw2_frameMustResponse(frame);
+        }
         bw2_reqctxSignal(rctx);
         return (rctx->rv != 0);
     }
@@ -385,7 +406,10 @@ int bw2_subscribe(struct bw2_client* client, struct bw2_subscribeParams* p, stru
     BW2_REQUEST_ADD_VERIFY(p, &req)
 
     bw2_reqctxInit(&subctx->reqctx, _bw2_simpleMessage_cb, subctx);
-    bw2_transact(client, &req, &subctx->reqctx);
+    int rv = bw2_transact(client, &req, &subctx->reqctx);
+    if (rv != 0) {
+        return rv;
+    }
     bw2_reqctxWait(&subctx->reqctx);
 
     /* Don't destroy the reqctx, since the subscription lasts after this
@@ -426,7 +450,12 @@ bool _bw2_list_cb(struct bw2_frame* frame, bool final, struct bw2_reqctx* rctx, 
     if (gotResp) {
         /* Deliver this frame to the application via the on_message function. */
         struct bw2_chararr_ctx* lctx = ctx;
-        if (lctx->on_message != NULL) {
+        if (frame == NULL) {
+            if (lctx->on_message != NULL) {
+                lctx->on_message(NULL, 0, final, rctx->rv);
+            }
+            return true;
+        } else if (lctx->on_message != NULL) {
             struct bw2_header* childhdr = bw2_getFirstHeader(frame, "child");
 
             char* childuri;
@@ -438,12 +467,14 @@ bool _bw2_list_cb(struct bw2_frame* frame, bool final, struct bw2_reqctx* rctx, 
                 childuri = childhdr->value;
                 childuri_len = childhdr->len;
             }
-            return lctx->on_message(childuri, childuri_len, final);
+            return lctx->on_message(childuri, childuri_len, final, 0);
         }
         return false;
     } else {
         /* This should be the RESP frame. */
-        rctx->rv = bw2_frameMustResponse(frame);
+        if (frame != NULL) {
+            rctx->rv = bw2_frameMustResponse(frame);
+        }
         bw2_reqctxSignal(rctx);
         return (rctx->rv != 0);
     }
@@ -462,7 +493,10 @@ int bw2_list(struct bw2_client* client, struct bw2_listParams* p, struct bw2_cha
     BW2_REQUEST_ADD_VERIFY(p, &req)
 
     bw2_reqctxInit(&lctx->reqctx, _bw2_list_cb, lctx);
-    bw2_transact(client, &req, &lctx->reqctx);
+    int rv = bw2_transact(client, &req, &lctx->reqctx);
+    if (rv != 0) {
+        return rv;
+    }
     bw2_reqctxWait(&lctx->reqctx);
 
     /* Don't destroy the reqctx, since we may continue to get results for some
@@ -480,22 +514,23 @@ struct bw2_createDOT_ctx {
 bool _bw2_createDOT_cb(struct bw2_frame* frame, bool final, struct bw2_reqctx* rctx, void* ctx) {
     (void) final;
 
-    struct bw2_createDOT_ctx* cdctx = ctx;
+    if (frame != NULL) {
+        struct bw2_createDOT_ctx* cdctx = ctx;
 
-    if (cdctx->dothash != NULL) {
-        struct bw2_header* hashhdr = bw2_getFirstHeader(frame, "hash");
-        if (hashhdr != NULL) {
-            bw2_dotHash_set(cdctx->dothash, hashhdr->value, hashhdr->len);
+        if (cdctx->dothash != NULL) {
+            struct bw2_header* hashhdr = bw2_getFirstHeader(frame, "hash");
+            if (hashhdr != NULL) {
+                bw2_dotHash_set(cdctx->dothash, hashhdr->value, hashhdr->len);
+            }
         }
-    }
-    if (cdctx->dot != NULL) {
-        struct bw2_payloadobj* dotpo = frame->pos;
-        if (dotpo != NULL) {
-            bw2_dot_set(cdctx->dot, dotpo->po, dotpo->polen);
+        if (cdctx->dot != NULL) {
+            struct bw2_payloadobj* dotpo = frame->pos;
+            if (dotpo != NULL) {
+                bw2_dot_set(cdctx->dot, dotpo->po, dotpo->polen);
+            }
         }
+        rctx->rv = bw2_frameMustResponse(frame);
     }
-
-    rctx->rv = bw2_frameMustResponse(frame);
 
     bw2_reqctxSignal(rctx);
 
@@ -527,11 +562,16 @@ int bw2_createDOT(struct bw2_client* client, struct bw2_createDOTParams* p, stru
     struct bw2_reqctx reqctx;
     bw2_reqctxInit(&reqctx, _bw2_createDOT_cb, &cdctx);
 
-    bw2_transact(client, &req, &reqctx);
+    int rv = bw2_transact(client, &req, &reqctx);
+    if (rv != 0) {
+        goto done;
+    }
 
     bw2_reqctxWait(&reqctx);
-    bw2_reqctxDestroy(&reqctx);
+    rv = reqctx.rv;
 
+done:
+    bw2_reqctxDestroy(&reqctx);
     return reqctx.rv;
 }
 
@@ -543,22 +583,22 @@ struct bw2_createEntity_ctx {
 bool _bw2_createEntity_cb(struct bw2_frame* frame, bool final, struct bw2_reqctx* rctx, void* ctx) {
     (void) final;
 
-    struct bw2_createEntity_ctx* cectx = ctx;
-
-    if (cectx->vkhash != NULL) {
-        struct bw2_header* vkhdr = bw2_getFirstHeader(frame, "vk");
-        if (vkhdr != NULL) {
-            bw2_vkHash_set(cectx->vkhash, vkhdr->value, vkhdr->len);
+    if (frame != NULL) {
+        struct bw2_createEntity_ctx* cectx = ctx;
+        if (cectx->vkhash != NULL) {
+            struct bw2_header* vkhdr = bw2_getFirstHeader(frame, "vk");
+            if (vkhdr != NULL) {
+                bw2_vkHash_set(cectx->vkhash, vkhdr->value, vkhdr->len);
+            }
         }
-    }
-    if (cectx->vk != NULL) {
-        struct bw2_payloadobj* vkpo = frame->pos;
-        if (vkpo != NULL) {
-            bw2_vk_set(cectx->vk, vkpo->po, vkpo->polen);
+        if (cectx->vk != NULL) {
+            struct bw2_payloadobj* vkpo = frame->pos;
+            if (vkpo != NULL) {
+                bw2_vk_set(cectx->vk, vkpo->po, vkpo->polen);
+            }
         }
+        rctx->rv = bw2_frameMustResponse(frame);
     }
-
-    rctx->rv = bw2_frameMustResponse(frame);
 
     bw2_reqctxSignal(rctx);
 
@@ -582,27 +622,32 @@ int bw2_createEntity(struct bw2_client* client, struct bw2_createEntityParams* p
     struct bw2_reqctx reqctx;
     bw2_reqctxInit(&reqctx, _bw2_createEntity_cb, &cectx);
 
-    bw2_transact(client, &req, &reqctx);
+    int rv = bw2_transact(client, &req, &reqctx);
+    if (rv != 0) {
+        goto done;
+    }
 
     bw2_reqctxWait(&reqctx);
-    bw2_reqctxDestroy(&reqctx);
+    rv = reqctx.rv;
 
+done:
+    bw2_reqctxDestroy(&reqctx);
     return reqctx.rv;
 }
 
 bool _bw2_createDOTChain_cb(struct bw2_frame* frame, bool final, struct bw2_reqctx* rctx, void* ctx) {
     (void) final;
 
-    struct bw2_dotChainHash* dotchainhash = ctx;
-
-    if (dotchainhash != NULL) {
-        struct bw2_header* hashhdr = bw2_getFirstHeader(frame, "hash");
-        if (hashhdr != NULL) {
-            bw2_dotChainHash_set(dotchainhash, hashhdr->value, hashhdr->len);
+    if (frame != NULL) {
+        struct bw2_dotChainHash* dotchainhash = ctx;
+        if (dotchainhash != NULL) {
+            struct bw2_header* hashhdr = bw2_getFirstHeader(frame, "hash");
+            if (hashhdr != NULL) {
+                bw2_dotChainHash_set(dotchainhash, hashhdr->value, hashhdr->len);
+            }
         }
+        rctx->rv = bw2_frameMustResponse(frame);
     }
-
-    rctx->rv = bw2_frameMustResponse(frame);
 
     bw2_reqctxSignal(rctx);
 
@@ -620,11 +665,16 @@ int bw2_createDOTChain(struct bw2_client* client, struct bw2_createDOTChainParam
     struct bw2_reqctx reqctx;
     bw2_reqctxInit(&reqctx, _bw2_createDOTChain_cb, dotchainhash);
 
-    bw2_transact(client, &req, &reqctx);
+    int rv = bw2_transact(client, &req, &reqctx);
+    if (rv != 0) {
+        goto done;
+    }
 
     bw2_reqctxWait(&reqctx);
-    bw2_reqctxDestroy(&reqctx);
+    rv = reqctx.rv;
 
+done:
+    bw2_reqctxDestroy(&reqctx);
     return reqctx.rv;
 }
 
@@ -633,9 +683,14 @@ bool _bw2_buildChain_cb(struct bw2_frame* frame, bool final, struct bw2_reqctx* 
     bw2_reqctxSignalled(rctx, &gotResp);
 
     if (gotResp) {
-        /* Deliver this frame to the application via the on_message function. */
+        /* Deliver this frame to the application via the on_chain function. */
         struct bw2_simplechain_ctx* scctx = ctx;
-        if (scctx->on_chain != NULL) {
+        if (frame == NULL) {
+            if (scctx->on_chain != NULL) {
+                scctx->on_chain(NULL, final, rctx->rv);
+            }
+            return true;
+        } else if (scctx->on_chain != NULL) {
             struct bw2_header* hashhdr = bw2_getFirstHeader(frame, "hash");
 
             if (hashhdr != NULL) {
@@ -675,15 +730,17 @@ bool _bw2_buildChain_cb(struct bw2_frame* frame, bool final, struct bw2_reqctx* 
                     sc.content = NULL;
                     sc.content_len = 0;
                 }
-                return scctx->on_chain(&sc, final);
+                return scctx->on_chain(&sc, final, 0);
             } else if (final) {
-                return scctx->on_chain(NULL, final);
+                return scctx->on_chain(NULL, final, 0);
             }
         }
         return false;
     } else {
         /* This should be the RESP frame. */
-        rctx->rv = bw2_frameMustResponse(frame);
+        if (frame != NULL) {
+            rctx->rv = bw2_frameMustResponse(frame);
+        }
         bw2_reqctxSignal(rctx);
         return (rctx->rv != 0);
     }
@@ -698,7 +755,11 @@ int bw2_buildChain(struct bw2_client* client, struct bw2_buildChainParams* p, st
     BW2_REQUEST_ADD_ACCESS_PERMISSIONS(p, &req)
 
     bw2_reqctxInit(&scctx->reqctx, _bw2_buildChain_cb, NULL);
-    bw2_transact(client, &req, &scctx->reqctx);
+    int rv = bw2_transact(client, &req, &scctx->reqctx);
+    if (rv != 0) {
+        return rv;
+    }
+
     bw2_reqctxWait(&scctx->reqctx);
 
     /* Don't destroy the reqctx, since we may continue to get results for some
