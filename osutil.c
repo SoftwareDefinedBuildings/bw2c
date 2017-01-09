@@ -1,6 +1,6 @@
 #include "osutil.h"
 
-#if (OS == LINUX)
+#if (BW2_OS == LINUX)
 
 int bw2_mutexInit(struct bw2_mutex* lock) {
     return pthread_mutex_init(&lock->mutex, NULL);
@@ -52,7 +52,7 @@ int bw2_threadCreate(char* thread_stack, int stack_size, void* (*function)(void*
     return rv;
 }
 
-#elif (OS == RIOT)
+#elif (BW2_OS == RIOT)
 
 int bw2_mutexInit(struct bw2_mutex* lock) {
     mutex_init(&lock->mutex);
@@ -103,7 +103,7 @@ int bw2_threadCreate(char* thread_stack, int stack_size, void* (*function)(void*
     kernel_pid_t thread_id = thread_create(thread_stack, stack_size, 0, 0, function, arg, "BOSSWAVE");
 
     if (thread_id < 0) {
-        return BW2_ERROR_SYSTEM_RESOURCE;
+        return BW2_ERROR_SYSTEM_RESOURCE_UNAVAILABLE;
     }
 
     if (tid != NULL) {

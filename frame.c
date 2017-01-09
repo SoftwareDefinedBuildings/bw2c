@@ -142,7 +142,7 @@ int bw2_readFrame(struct bw2_frame* frame, char* frameheap, size_t heapsize, int
 struct bw2_header* bw2_getFirstHeader(struct bw2_frame* frame, const char* key) {
     struct bw2_header* curr;
     for (curr = frame->hdrs; curr != NULL; curr = curr->next) {
-        if (strncmp(curr->key, key, sizeof(curr->key)) == 0) {
+        if (strncmp(curr->key, key, BW2_FRAME_MAX_KEY_LENGTH + 1) == 0) {
             return curr;
         }
     }

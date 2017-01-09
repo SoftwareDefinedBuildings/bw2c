@@ -100,7 +100,7 @@ int bw2_drop_full_array(size_t len, int fd, size_t* bytesread) {
     return BW2_UNTIL_ARRAY_FULL;
 }
 
-int bw2_ponum_from_dot_form(const char* dotform, int32_t* ponum) {
+int bw2_ponum_from_dot_form(const char* dotform, uint32_t* ponum) {
     const char* numstr = dotform;
     char* end;
     long long unsigned int first, second, third, fourth;

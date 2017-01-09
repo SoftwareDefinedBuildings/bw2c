@@ -12,6 +12,7 @@
 #define BW2_FRAME_MAX_RONUM_LENGTH 3
 #define BW2_FRAME_MAX_TIMESTR_LENGTH 23
 #define BW2_FRAME_MAX_TIME_DIGITS 20
+#define BW2_FRAME_MAX_TTL_LENGTH 3
 
 /* 3 for "po " + key length + 1 for space + 10 for Length +
  * 1 for space + 1 for null terminator

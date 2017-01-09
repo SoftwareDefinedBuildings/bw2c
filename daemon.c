@@ -13,6 +13,9 @@ void bw2_daemon(struct bw2_client* client, char* frameheap, size_t heapsize) {
     int rv;
     while (true) {
         rv = bw2_readFrame(&frame, frameheap, heapsize, client->connfd);
+        if (rv != 0) {
+            return;
+        }
 
         struct bw2_reqctx** currptr = &client->reqs;
         struct bw2_reqctx* curr = *currptr;

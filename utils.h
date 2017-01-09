@@ -31,7 +31,7 @@ int bw2_read_until_full(char* arr, size_t len, int fd, size_t* bytesread);
 
 int bw2_drop_full_array(size_t len, int fd, size_t* bytesread);
 
-int bw2_ponum_from_dot_form(const char* dotform, int32_t* ponum);
+int bw2_ponum_from_dot_form(const char* dotform, uint32_t* ponum);
 
 
 /* The following functions do not use the above four error codes. */

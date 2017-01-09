@@ -4,9 +4,11 @@
 #define LINUX 0
 #define RIOT 1
 
-#define OS LINUX
+#ifndef BW2_OS
+#error "BW2_OS is not #define'd. Try compiling with -DBW2_OS=LINUX or -DBW2_OS=RIOT"
+#endif
 
-#if (OS == LINUX)
+#if (BW2_OS == LINUX)
 
 #include <pthread.h>
 
@@ -18,7 +20,7 @@ struct bw2_cond {
     pthread_cond_t cond;
 };
 
-#elif (OS == RIOT)
+#elif (BW2_OS == RIOT)
 
 #include <condition.h>
 #include <mutex.h>
@@ -32,7 +34,7 @@ struct bw2_cond {
 };
 
 #else
-#error "OS must be #define'd to LINUX or RIOT"
+#error "BW2_OS must be #define'd to LINUX or RIOT"
 #endif
 
 /* Functions for synchronization primitives. */
