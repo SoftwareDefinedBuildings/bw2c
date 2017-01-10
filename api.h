@@ -58,7 +58,7 @@ struct bw2_client {
     struct bw2_mutex seqnolock;
     int32_t curseqno;
 
-    int status;
+    bool connected;
 };
 
 #define BW2_ELABORATE_FULL "full"
@@ -209,8 +209,10 @@ struct bw2_simplechain_ctx {
     struct bw2_reqctx reqctx;
 };
 
-void bw2_clientInit(struct bw2_client* client);
+int bw2_clientInit(struct bw2_client* client);
 int bw2_connect(struct bw2_client* client, const struct sockaddr* addr, socklen_t addrlen, char* frameheap, size_t heapsize);
+int bw2_disconnect(struct bw2_client* client);
+bool bw2_isConnected(struct bw2_client* client);
 int bw2_setEntity(struct bw2_client* client, char* entity, size_t entitylen, struct bw2_vkHash* vkhash);
 int bw2_publish(struct bw2_client* client, struct bw2_publishParams* p);
 int bw2_subscribe(struct bw2_client* client, struct bw2_subscribeParams* p, struct bw2_simplemsg_ctx* subctx, struct bw2_subscriptionHandle* handle);

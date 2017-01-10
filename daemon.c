@@ -51,14 +51,16 @@ void bw2_daemon(struct bw2_client* client, char* frameheap, size_t heapsize) {
         struct bw2_reqctx** currptr = &client->reqs;
         struct bw2_reqctx* curr = *currptr;
 
-        if (rv != 0 || client->status == BW2_ERROR_CONNECTION_LOST) {
+        if (rv != 0 || !client->connected) {
             /* Mark the client as disconnected so that future requests can just
              * fail immediately.
              */
-            if (client->status != BW2_ERROR_CONNECTION_LOST) {
+            bw2_mutexLock(&client->outlock);
+            if (client->connected) {
                 close(client->connfd);
-                client->status = BW2_ERROR_CONNECTION_LOST;
+                client->connected = false;
             }
+            bw2_mutexUnlock(&client->outlock);
 
             /* Release all resources and close the socket. */
             while (curr != NULL) {
@@ -115,7 +117,7 @@ int bw2_transact(struct bw2_client* client, struct bw2_frame* frame, struct bw2_
 
         bw2_mutexLock(&client->reqslock);
 
-        if (client->status == BW2_ERROR_CONNECTION_LOST) {
+        if (!client->connected) {
             bw2_mutexUnlock(&client->reqslock);
             return BW2_ERROR_CONNECTION_LOST;
         }
@@ -127,16 +129,16 @@ int bw2_transact(struct bw2_client* client, struct bw2_frame* frame, struct bw2_
 
     bw2_mutexLock(&client->outlock);
     rv = bw2_writeFrame(frame, client->connfd);
-    bw2_mutexUnlock(&client->outlock);
 
     if (rv == -1 && (errno == ETIMEDOUT || errno == ECONNRESET
                         || errno == ECONNREFUSED || errno == EBADF)) {
-        bw2_mutexLock(&client->reqslock);
         close(client->connfd);
-        client->status = BW2_ERROR_CONNECTION_LOST;
-        bw2_mutexUnlock(&client->reqslock);
+        client->connected = false;
+        bw2_mutexUnlock(&client->outlock);
         return BW2_ERROR_CONNECTION_LOST;
     }
+
+    bw2_mutexUnlock(&client->outlock);
 
     return 0;
 }

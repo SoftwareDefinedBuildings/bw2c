@@ -170,14 +170,24 @@ Payload object numbers and dot forms can be found in `ponum.h`.
 ### The Functions
 
 ```
-void bw2_clientInit(struct bw2_client* client);
+int bw2_clientInit(struct bw2_client* client);
 ```
-This function initializes a client struct, setting its members to their initial values. It does not actually create an active BOSSWAVE OOB session, but must be called before calling `bw2_connect`.
+This function initializes a client structure, setting its members to their initial values. It does not actually create an active BOSSWAVE OOB session, but must be called before calling `bw2_connect`.
 
 ```
 int bw2_connect(struct bw2_client* client, const struct sockaddr* addr, socklen_t addrlen, char* frameheap, size_t heapsize);
 ```
 This function connects to the specified BOSSWAVE agent, and creates the BOSSWAVE thread for the connection. The provided frame heap is used to store frames that are read from the agent.
+
+```
+int bw2_disconnect(struct bw2_client* client);
+```
+This function causes the client to disconnect from the current BOSSWAVE agent.
+
+```
+bool bw2_isConnected(struct bw2_client* client);
+```
+This function returns a boolean indicating whether the client is currently connected to a BOSSWAVE agent.
 
 ```
 int bw2_setEntity(struct bw2_client* client, char* entity, size_t entitylen, struct bw2_vkHash* vkhash);

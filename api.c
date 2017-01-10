@@ -185,11 +185,38 @@ int32_t _bw2_getSeqNo(struct bw2_client* client) {
     return seqno;
 }
 
-void bw2_clientInit(struct bw2_client* client) {
+int bw2_clientInit(struct bw2_client* client) {
+    int rv;
     memset(client, 0x00, sizeof(struct bw2_client));
-    bw2_mutexInit(&client->outlock);
-    bw2_mutexInit(&client->reqslock);
-    bw2_mutexInit(&client->seqnolock);
+    rv = bw2_mutexInit(&client->outlock);
+    if (rv != 0) {
+        goto error1;
+    }
+    rv = bw2_mutexInit(&client->reqslock);
+    if (rv != 0) {
+        goto error2;
+    }
+    rv = bw2_mutexInit(&client->seqnolock);
+    if (rv != 0) {
+        goto error3;
+    }
+
+    return 0;
+
+error3:
+    bw2_mutexDestroy(&client->reqslock);
+error2:
+    bw2_mutexDestroy(&client->outlock);
+error1:
+    return BW2_ERROR_SYNCHRONIZATION;
+}
+
+bool bw2_isConnected(struct bw2_client* client) {
+    bool rv;
+    bw2_mutexLock(&client->outlock);
+    rv = client->connected;
+    bw2_mutexUnlock(&client->outlock);
+    return rv;
 }
 
 struct bw2_daemon_info {
@@ -223,11 +250,12 @@ void* _bw2_daemon_trampoline(void* arg) {
 int bw2_connect(struct bw2_client* client, const struct sockaddr* addr, socklen_t addrlen, char* frameheap, size_t heapsize) {
     int sock = socket(addr->sa_family, SOCK_STREAM, 0);
     if (sock == -1) {
-        return -1;
+        return BW2_ERROR_SYSTEM_RESOURCE_UNAVAILABLE;
     }
 
     int rv = connect(sock, addr, addrlen);
     if (rv != 0) {
+        rv = BW2_ERROR_CONNECTION_LOST;
         goto closeanderror;
     }
 
@@ -274,11 +302,23 @@ int bw2_connect(struct bw2_client* client, const struct sockaddr* addr, socklen_
         goto closeanderror;
     }
 
+    client->connected = true;
+
     return 0;
 
 closeanderror:
     close(sock);
     return rv;
+}
+
+int bw2_disconnect(struct bw2_client* client) {
+    bw2_mutexLock(&client->outlock);
+    if (client->connected) {
+        client->connected = false;
+        close(client->connfd);
+    }
+    bw2_mutexUnlock(&client->outlock);
+    return 0;
 }
 
 bool _bw2_simpleReq_cb(struct bw2_frame* frame, bool final, struct bw2_reqctx* rctx, void* ctx) {
