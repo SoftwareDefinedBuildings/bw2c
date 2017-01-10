@@ -32,6 +32,12 @@
 #include "objects.h"
 #include "utils.h"
 
+void bw2_subscriptionHandle_set(struct bw2_subscriptionHandle* handle, char* blob, size_t bloblen) {
+    bloblen = BW2_MIN(bloblen, BW2_OBJECTS_MAX_SUBSCRIPTION_HANDLE_LENGTH);
+    memcpy(handle->handle, blob, bloblen);
+    handle->handlelen = bloblen;
+}
+
 void bw2_vk_set(struct bw2_vk* vk, char* blob, size_t bloblen) {
     bloblen = BW2_MIN(bloblen, BW2_OBJECTS_MAX_VK_LENGTH);
     memcpy(vk->vk, blob, bloblen);

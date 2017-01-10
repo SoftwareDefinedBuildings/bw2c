@@ -421,7 +421,37 @@ bool _bw2_simpleMessage_cb(struct bw2_frame* frame, bool final, struct bw2_reqct
     }
 }
 
-int bw2_subscribe(struct bw2_client* client, struct bw2_subscribeParams* p, struct bw2_simplemsg_ctx* subctx) {
+struct bw2_subscribe_ctx {
+    struct bw2_simplemsg_ctx* smctx;
+    struct bw2_subscriptionHandle* handle;
+};
+
+/* This callback is used for the first frame after a subscribe message. */
+bool _bw2_subscribe_cb(struct bw2_frame* frame, bool final, struct bw2_reqctx* rctx, void* ctx) {
+    struct bw2_subscribe_ctx* sparams = ctx;
+
+    /* This should be the RESP frame. */
+    if (frame != NULL) {
+        rctx->rv = bw2_frameMustResponse(frame);
+    }
+    if (rctx->rv == 0 && sparams->handle != NULL) {
+        struct bw2_header* handlehdr = bw2_getFirstHeader(frame, "handle");
+        if (handlehdr == NULL) {
+            rctx->rv = BW2_ERROR_MISSING_HEADER;
+        } else {
+            bw2_subscriptionHandle_set(sparams->handle, handlehdr->value, handlehdr->len);
+        }
+    }
+
+    /* Future frames should be handled by the Simple Message. */
+    rctx->onframe = _bw2_simpleMessage_cb;
+    rctx->ctx = sparams->smctx;
+
+    bw2_reqctxSignal(rctx);
+    return (rctx->rv != 0);
+}
+
+int bw2_subscribe(struct bw2_client* client, struct bw2_subscribeParams* p, struct bw2_simplemsg_ctx* subctx, struct bw2_subscriptionHandle* handle) {
     struct bw2_frame req;
     bw2_frameInit(&req, BW2_FRAME_CMD_SUBSCRIBE, _bw2_getSeqNo(client));
 
@@ -434,17 +464,19 @@ int bw2_subscribe(struct bw2_client* client, struct bw2_subscribeParams* p, stru
     BW2_REQUEST_ADD_LEAVE_PACKED(p, &req)
     BW2_REQUEST_ADD_VERIFY(p, &req)
 
-    bw2_reqctxInit(&subctx->reqctx, _bw2_simpleMessage_cb, subctx);
+    struct bw2_subscribe_ctx sparams;
+    sparams.smctx = subctx;
+    sparams.handle = handle;
+
+    bw2_reqctxInit(&subctx->reqctx, _bw2_subscribe_cb, &sparams);
     int rv = bw2_transact(client, &req, &subctx->reqctx);
     if (rv != 0) {
-        return rv;
+        goto done;
     }
     bw2_reqctxWait(&subctx->reqctx);
 
-    /* Don't destroy the reqctx, since the subscription lasts after this
-     * function returns.
-     */
-
+done:
+    bw2_reqctxDestroy(&subctx->reqctx);
     return subctx->reqctx.rv;
 }
 
@@ -465,10 +497,7 @@ int bw2_query(struct bw2_client* client, struct bw2_queryParams* p, struct bw2_s
     bw2_transact(client, &req, &qctx->reqctx);
     bw2_reqctxWait(&qctx->reqctx);
 
-    /* Don't destroy the reqctx, since we may continue to get results for some
-     * time after this function returns.
-     */
-
+    bw2_reqctxDestroy(&qctx->reqctx);
     return qctx->reqctx.rv;
 }
 
@@ -524,14 +553,12 @@ int bw2_list(struct bw2_client* client, struct bw2_listParams* p, struct bw2_cha
     bw2_reqctxInit(&lctx->reqctx, _bw2_list_cb, lctx);
     int rv = bw2_transact(client, &req, &lctx->reqctx);
     if (rv != 0) {
-        return rv;
+        goto done;
     }
     bw2_reqctxWait(&lctx->reqctx);
 
-    /* Don't destroy the reqctx, since we may continue to get results for some
-     * time after this function returns.
-     */
-
+done:
+    bw2_reqctxDestroy(&lctx->reqctx);
     return lctx->reqctx.rv;
 }
 
@@ -786,14 +813,32 @@ int bw2_buildChain(struct bw2_client* client, struct bw2_buildChainParams* p, st
     bw2_reqctxInit(&scctx->reqctx, _bw2_buildChain_cb, NULL);
     int rv = bw2_transact(client, &req, &scctx->reqctx);
     if (rv != 0) {
-        return rv;
+        goto done;
     }
-
     bw2_reqctxWait(&scctx->reqctx);
 
-    /* Don't destroy the reqctx, since we may continue to get results for some
-     * time after this function returns.
-     */
-
+done:
+    bw2_reqctxDestroy(&scctx->reqctx);
     return scctx->reqctx.rv;
+}
+
+int bw2_unsubscribe(struct bw2_client* client, struct bw2_subscriptionHandle* handle) {
+    struct bw2_frame req;
+    bw2_frameInit(&req, BW2_FRAME_CMD_UNSUBSCRIBE, _bw2_getSeqNo(client));
+
+    struct bw2_header handlehdr;
+    bw2_KVInit(&handlehdr, "handle", handle->handle, handle->handlelen);
+    bw2_appendKV(&req, &handlehdr);
+
+    struct bw2_reqctx reqctx;
+    bw2_reqctxInit(&reqctx, _bw2_simpleReq_cb, NULL);
+    int rv = bw2_transact(client, &req, &reqctx);
+    if (rv != 0) {
+        goto done;
+    }
+    bw2_reqctxWait(&reqctx);
+
+done:
+    bw2_reqctxDestroy(&reqctx);
+    return reqctx.rv;
 }

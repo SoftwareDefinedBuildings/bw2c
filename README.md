@@ -24,14 +24,14 @@ Currently, the "old" API (i.e. the functions in https://github.com/immesys/bw2bi
 ## Concurrency Model
 Each BOSSWAVE client, represented in code with `struct bw2_client`, consists of a separate TCP connection to the BOSSWAVE agent and a thread (the "BOSSWAVE thread") that reads received frames from that connection. API calls (see api.h) can be made on any other thread, and will block until the response frame is received.
 
-Some API calls, such as subscribe, query, and list, may return multiple results contained in multiple frames. These calls operate asynchronously: they block until the initial response frame is received, and provide the actual results later. The BOSSWAVE bindings for the Go programming language (found in the immesys/bw2bind repository on GitHub) handle this by returning a channel which is populated by results as they arrive. The approach used by this library is to invoke a function, provided by the user, each time a new result is available. When invoking the API function, the user provides a function pointer as an argument as well as a context blob, and when a new result is available, the function is invoked, with the result and provided context blob provided as arguments. The user-provided function returns a boolean. If it is false, the user keeps listening for more results; if it is false, additional results are ignored.
+Some API calls, such as subscribe, query, and list, may return multiple results contained in multiple frames. These calls operate asynchronously: they block until the initial response frame is received, and provide the actual results later. The BOSSWAVE bindings for the Go programming language (found in the immesys/bw2bind repository on GitHub) handle this by returning a channel which is populated by results as they arrive. The approach used by this library is to invoke a function, provided by the user, each time a new result is available. When invoking the API function, the user provides a function pointer as an argument as well as a context blob, and when a new result is available, the function is invoked, with the result and provided context blob provided as arguments. The user-provided function returns a boolean. If it is `false`, the user keeps listening for more results; if it is `true`, additional results are ignored.
 
 The user-provided function is invoked on the BOSSWAVE thread, so it is not advisable to perform any operations in the user-defined function that will block for a long time. Making any API calls within a user-defined function will cause deadlock. Furthermore, because the received frame and any return-value structures (such as `struct bw2_simpleMessage` and `struct bw2_simpleChain`) is stack-allocated in the BOSSWAVE thread, any pointers passed as arguments to a user-provided function, and any pointers within structures passed as arguments to a user-provided function, will not be valid after the user-provided function returns. If the data is needed after the user-provided function returns, the user should make a copy of the needed data.
 
-## The Old API
+## The API
 
 ### Overview
-To use the Old API, include the appropriate header file:
+To use the API, include the appropriate header file:
 ```
 #include "bw2/api.h"
 ```
@@ -86,9 +86,9 @@ struct bw2_simplechain_ctx {
 };
 ```
 
-The context structure is allocated by the user, and then passed in with the API call. The context structure also contains additional elements used internally by this library, which contain data needed to keep track of the pending request and correctly deliver results as they become available. _Therefore, the user must not deallocate the context structure until all results have been delivered._ The FINAL parameter, passed to each user-provided function, when set to TRUE, indicates that the function will not be invoked any more times, and that the last result has been delivered and that the context structure can be deallocated.
+The context structure is allocated by the user, and then passed in with the API call. The context structure also contains additional elements used internally by this library, which contain data needed to keep track of the pending request and correctly deliver results as they become available. _Therefore, the user must not deallocate the context structure until all results have been delivered._ The `final` parameter, passed to each user-provided function, when set to `true`, indicates that the function will not be invoked any more times, and that the last result has been delivered and that the context structure can be deallocated.
 
-The user may also stop listening to additional results via the return value of the user-provided function. If the function returns true, then the library will not call the function any more, and the context structure can be deallocated. Note that for subscriptions, this is _not_ the same as unsubscribing from the URI! If the function returns true, then the agent will continue to deliver frames matching the subscription, but they will just be ignored by the library and will not be delivered to the user. Rather, use `bw2_unsubscribe` to properly unsubscribe from a URI.
+The user may also stop listening to additional results via the return value of the user-provided function. If the function returns `true`, then the library will not call the function any more, and the context structure can be deallocated. Note that for subscriptions, this is _not_ the same as unsubscribing from the URI! If the function returns `true`, then the agent will continue to deliver frames matching the subscription, but they will just be ignored by the library and will not be delivered to the user. Rather, use `bw2_unsubscribe` to properly unsubscribe from a URI.
 
 Finally, not every invocation of the user-provided function indicates that a new value is available. If the first argument to the function is `NULL`, then no new value is available, but the FINAL and ERROR parameters should still be checked.
 
@@ -164,6 +164,9 @@ struct bw2_dot {
 ```
 There are dedicated functions in `objects.h` used to set these structs, but the `next` pointer can be used to arrange them in linked lists to pass them as parameters to API calls. If needed, the data blobs can be read directly from the structs.
 
+### Payload Object Numbers
+Payload object numbers and dot forms can be found in `ponum.h`.
+
 ### The Functions
 
 ```
@@ -187,21 +190,23 @@ int bw2_publish(struct bw2_client* client, struct bw2_publishParams* p);
 Publishes or persists a message or messages based on the parameters `p`.
 
 ```
-int bw2_subscribe(struct bw2_client* client, struct bw2_subscribeParams* p, struct bw2_simplemsg_ctx* subctx);
+int bw2_subscribe(struct bw2_client* client, struct bw2_subscribeParams* p, struct bw2_simplemsg_ctx* subctx, struct bw2_subscriptionHandle* handle);
 ```
 Subscribes to a URI based on the parameters `p`. The subscription context (`subctx`) has an element that is a function pointer, and another element that contains the user context. When a message is received, that function is invoked, with the user context as the final argument.
 
-In addition to storing the user-provided function and context, `subctx` contains fields used internally by this library to keep track of the subscription. _Therefore, the subscription context cannot be deallocated until either (1) the user unsubscribes, (2) the function is called with the parameter named "final" set to true, or (3) the user returns true from the user-defined function to stop listening for subscription results._
+In addition to storing the user-provided function and context, `subctx` contains fields used internally by this library to keep track of the subscription. _Therefore, the subscription context cannot be deallocated until either (1) the function is called with the parameter named "final" set to `true` (which will happen if the user unsubscribes), or (3) the user returns `true` from the user-defined function to stop listening for subscription results._
+
+If `handle` is not `NULL`, the subscription handle is stored into the structure to which it points. The handle can later be used to unsubscribe from the URI using `bw2_unsubscribe`.
 
 ```
 int bw2_query(struct bw2_client* client, struct bw2_queryParams* p, struct bw2_simplemsg_ctx* qctx);
 ```
-Queries a URI for persisted messages based on the parameters `p`. The query context (`qctx`) functions exactly like the `subctx` for `bw2_subscribe`: the user sets two fields in `qctx`, namely the user-provided function and context, and must keep `qctx` in memory until the final result is received, or until the user stops listening for responses by returning true.
+Queries a URI for persisted messages based on the parameters `p`. The query context (`qctx`) functions exactly like the `subctx` for `bw2_subscribe`: the user sets two fields in `qctx`, namely the user-provided function and context, and must keep `qctx` in memory until the final result is received, or until the user stops listening for responses by returning `true`.
 
 ```
 int bw2_list(struct bw2_client* client, struct bw2_listParams* p, struct bw2_chararr_ctx* lctx);
 ```
-Lists children of the provided URI that have persisted messages, based on the parameters `p`. The list context (`lctx`) functions exactly like the `subctx` for `bw2_subscribe`: the user sets two fields in `lctx`, namely the user-provided function and context, and must keep `lctx` in memory until the final result is received, or until the user stops listening for responses by returning true.
+Lists children of the provided URI that have persisted messages, based on the parameters `p`. The list context (`lctx`) functions exactly like the `subctx` for `bw2_subscribe`: the user sets two fields in `lctx`, namely the user-provided function and context, and must keep `lctx` in memory until the final result is received, or until the user stops listening for responses by returning `true`.
 
 ```
 int bw2_createDOT(struct bw2_client* client, struct bw2_createDOTParams* p, struct bw2_dotHash* dothash, struct bw2_dot* dot);
@@ -222,3 +227,8 @@ Creates a DoT Chain out of a series of Declarations of Trust (DoTs) according to
 int bw2_buildChain(struct bw2_client* client, struct bw2_buildChainParams* p, struct bw2_simplechain_ctx* scctx);
 ```
 Requests the BOSSWAVE agent to build a DoT chain according to the parameters `p`. The simple chain context `scctx` functions exactly like the subscription context for `bw2_subscribe`: the user sets two elements of the struct to specify a function and context, and must keep `scctx` in memory until all chains have been returned or the user stops listening for responses.
+
+```
+int bw2_unsubscribe(struct bw2_client* client, struct bw2_subscriptionHandle* handle);
+```
+Cancels the subscription corresponding to `handle`. The handle of a subscription is obtained when calling `bw2_subscribe`. The function provided by the user to `bw2_subscribe` will be invoked once more with a NULL message and with the `final` argument set to `true`. One can only unsubscribe from a URI with the same client with which the subscription was made.

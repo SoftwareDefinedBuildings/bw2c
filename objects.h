@@ -34,11 +34,17 @@
 
 #include "frame.h"
 
+#define BW2_OBJECTS_MAX_SUBSCRIPTION_HANDLE_LENGTH 30
 #define BW2_OBJECTS_MAX_VK_LENGTH 100
 #define BW2_OBJECTS_MAX_VK_HASH_LENGTH 100
 #define BW2_OBJECTS_MAX_DOT_LENGTH 100
 #define BW2_OBJECTS_MAX_DOT_HASH_LENGTH 100
 #define BW2_OBJECTS_MAX_DOT_CHAIN_HASH_LENGTH 100
+
+struct bw2_subscriptionHandle {
+    char handle[BW2_OBJECTS_MAX_SUBSCRIPTION_HANDLE_LENGTH];
+    size_t handlelen;
+};
 
 struct bw2_vk {
     char vk[BW2_OBJECTS_MAX_VK_LENGTH];
@@ -81,6 +87,7 @@ struct bw2_dotChainHash {
     size_t dotchainhashlen;
 };
 
+void bw2_subscriptionHandle_set(struct bw2_subscriptionHandle* handle, char* blob, size_t bloblen);
 void bw2_vk_set(struct bw2_vk* vk, char* blob, size_t bloblen);
 void bw2_vkHash_set(struct bw2_vkHash* vkhash, char* blob, size_t bloblen);
 void bw2_dot_set(struct bw2_dot* dot, char* blob, size_t bloblen);

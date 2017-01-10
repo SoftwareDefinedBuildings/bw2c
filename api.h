@@ -213,12 +213,13 @@ void bw2_clientInit(struct bw2_client* client);
 int bw2_connect(struct bw2_client* client, const struct sockaddr* addr, socklen_t addrlen, char* frameheap, size_t heapsize);
 int bw2_setEntity(struct bw2_client* client, char* entity, size_t entitylen, struct bw2_vkHash* vkhash);
 int bw2_publish(struct bw2_client* client, struct bw2_publishParams* p);
-int bw2_subscribe(struct bw2_client* client, struct bw2_subscribeParams* p, struct bw2_simplemsg_ctx* subctx);
+int bw2_subscribe(struct bw2_client* client, struct bw2_subscribeParams* p, struct bw2_simplemsg_ctx* subctx, struct bw2_subscriptionHandle* handle);
 int bw2_query(struct bw2_client* client, struct bw2_queryParams* p, struct bw2_simplemsg_ctx* qctx);
 int bw2_list(struct bw2_client* client, struct bw2_listParams* p, struct bw2_chararr_ctx* lctx);
 int bw2_createDOT(struct bw2_client* client, struct bw2_createDOTParams* p, struct bw2_dotHash* dothash, struct bw2_dot* dot);
 int bw2_createEntity(struct bw2_client* client, struct bw2_createEntityParams* p, struct bw2_vkHash* vkhash, struct bw2_vk* vk);
 int bw2_createDOTChain(struct bw2_client* client, struct bw2_createDOTChainParams* p, struct bw2_dotChainHash* dotchainhash);
 int bw2_buildChain(struct bw2_client* client, struct bw2_buildChainParams* p, struct bw2_simplechain_ctx* scctx);
+int bw2_unsubscribe(struct bw2_client* client, struct bw2_subscriptionHandle* handle);
 
 #endif
