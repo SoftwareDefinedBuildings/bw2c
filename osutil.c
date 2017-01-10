@@ -27,6 +27,7 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#include "errors.h"
 #include "osutil.h"
 
 #if (BW2_OS == LINUX)
@@ -136,7 +137,7 @@ int bw2_threadCreate(char* thread_stack, int stack_size, void* (*function)(void*
     }
 
     if (tid != NULL) {
-        *tid = (int) pthread_id;
+        *tid = (int) thread_id;
     }
 
     return 0;
