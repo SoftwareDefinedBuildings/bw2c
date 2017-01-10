@@ -76,7 +76,7 @@
 #define BW2_REQUEST_ADD_PRIMARY_ACCESS_CHAIN(PARAMPTR, REQPTR) \
     struct bw2_header pac; \
     if ((PARAMPTR)->primaryAccessChain != NULL) { \
-        bw2_KVInit(&pac, "primary_access_chain", (PARAMPTR)->primaryAccessChain, 0); \
+        bw2_KVInit(&pac, "primary_access_chain", (PARAMPTR)->primaryAccessChain->dotchainhash, (PARAMPTR)->primaryAccessChain->dotchainhashlen); \
         bw2_appendKV(REQPTR, &pac); \
     }
 
@@ -92,7 +92,7 @@
 
 #define BW2_REQUEST_ADD_ELABORATE_PAC(PARAMPTR, REQPTR) \
     struct bw2_header elaboratePAC; \
-    bw2_KVInit(&elaboratePAC, "elaborate_pac", (PARAMPTR)->elaboratePAC, 0); \
+    bw2_KVInit(&elaboratePAC, "elaborate_pac", (PARAMPTR)->elaboratePAC != NULL ? (PARAMPTR)->elaboratePAC : BW2_ELABORATE_DEFAULT, 0); \
     bw2_appendKV(REQPTR, &elaboratePAC);
 
 #define BW2_REQUEST_ADD_VERIFY(PARAMPTR, REQPTR) \
@@ -402,13 +402,13 @@ bool _bw2_simpleMessage_cb(struct bw2_frame* frame, bool final, struct bw2_reqct
         struct bw2_simplemsg_ctx* smctx = ctx;
         if (frame == NULL) {
             if (smctx->on_message != NULL) {
-                smctx->on_message(NULL, final, rctx->rv);
+                smctx->on_message(NULL, final, rctx->rv, smctx->ctx);
             }
             return true;
         } else if (smctx->on_message != NULL) {
             struct bw2_simpleMessage sm;
             _bw2_simplemsg_from_frame(&sm, frame);
-            return smctx->on_message(&sm, final, 0);
+            return smctx->on_message(&sm, final, 0, smctx->ctx);
         }
         return false;
     } else {
@@ -481,7 +481,7 @@ bool _bw2_list_cb(struct bw2_frame* frame, bool final, struct bw2_reqctx* rctx, 
         struct bw2_chararr_ctx* lctx = ctx;
         if (frame == NULL) {
             if (lctx->on_message != NULL) {
-                lctx->on_message(NULL, 0, final, rctx->rv);
+                lctx->on_message(NULL, 0, final, rctx->rv, lctx->ctx);
             }
             return true;
         } else if (lctx->on_message != NULL) {
@@ -496,7 +496,7 @@ bool _bw2_list_cb(struct bw2_frame* frame, bool final, struct bw2_reqctx* rctx, 
                 childuri = childhdr->value;
                 childuri_len = childhdr->len;
             }
-            return lctx->on_message(childuri, childuri_len, final, 0);
+            return lctx->on_message(childuri, childuri_len, final, 0, lctx->ctx);
         }
         return false;
     } else {
@@ -716,7 +716,7 @@ bool _bw2_buildChain_cb(struct bw2_frame* frame, bool final, struct bw2_reqctx* 
         struct bw2_simplechain_ctx* scctx = ctx;
         if (frame == NULL) {
             if (scctx->on_chain != NULL) {
-                scctx->on_chain(NULL, final, rctx->rv);
+                scctx->on_chain(NULL, final, rctx->rv, scctx->ctx);
             }
             return true;
         } else if (scctx->on_chain != NULL) {
@@ -759,9 +759,9 @@ bool _bw2_buildChain_cb(struct bw2_frame* frame, bool final, struct bw2_reqctx* 
                     sc.content = NULL;
                     sc.content_len = 0;
                 }
-                return scctx->on_chain(&sc, final, 0);
+                return scctx->on_chain(&sc, final, 0, scctx->ctx);
             } else if (final) {
-                return scctx->on_chain(NULL, final, 0);
+                return scctx->on_chain(NULL, final, 0, scctx->ctx);
             }
         }
         return false;

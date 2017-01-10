@@ -27,8 +27,8 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef UTILS_H
-#define UTILS_H
+#ifndef BW2_UTILS_H
+#define BW2_UTILS_H
 
 #include <stdint.h>
 #include <string.h>

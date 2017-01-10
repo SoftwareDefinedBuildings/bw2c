@@ -27,8 +27,8 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef OSUTIL_H
-#define OSUTIL_H
+#ifndef BW2_OSUTIL_H
+#define BW2_OSUTIL_H
 
 #define LINUX 0
 #define RIOT 1

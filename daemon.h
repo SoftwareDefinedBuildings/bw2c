@@ -27,8 +27,8 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef DAEMON_H
-#define DAEMON_H
+#ifndef BW2_DAEMON_H
+#define BW2_DAEMON_H
 
 #include <stdbool.h>
 #include <stdlib.h>

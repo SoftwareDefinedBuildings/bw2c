@@ -27,8 +27,8 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef OBJECTS_H
-#define OBJECTS_H
+#ifndef BW2_OBJECTS_H
+#define BW2_OBJECTS_H
 
 #include <sys/types.h>
 

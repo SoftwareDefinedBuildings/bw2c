@@ -27,8 +27,8 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef API_H
-#define API_H
+#ifndef BW2_API_H
+#define BW2_API_H
 
 #include <stdbool.h>
 #include <sys/socket.h>
@@ -68,7 +68,7 @@ struct bw2_client {
 
 struct bw2_publishParams {
     char* uri;
-    char* primaryAccessChain;
+    struct bw2_dotChainHash* primaryAccessChain;
     bool autochain;
     struct bw2_routingobj* routingObjects;
     struct bw2_payloadobj* payloadObjects;
@@ -81,7 +81,7 @@ struct bw2_publishParams {
 
 struct bw2_subscribeParams {
     char* uri;
-    char* primaryAccessChain;
+    struct bw2_dotChainHash* primaryAccessChain;
     bool autochain;
     struct bw2_routingobj* routingObjects;
     struct tm* expiry;
@@ -93,7 +93,7 @@ struct bw2_subscribeParams {
 
 struct bw2_queryParams {
     char* uri;
-    char* primaryAccessChain;
+    struct bw2_dotChainHash* primaryAccessChain;
     bool autochain;
     struct bw2_routingobj* routingObjects;
     struct tm* expiry;
@@ -105,7 +105,7 @@ struct bw2_queryParams {
 
 struct bw2_listParams {
     char* uri;
-    char* primaryAccessChain;
+    struct bw2_dotChainHash* primaryAccessChain;
     bool autochain;
     struct bw2_routingobj* routingObjects;
     struct tm* expiry;
@@ -149,6 +149,11 @@ struct bw2_buildChainParams {
     struct bw2_vkHash* to;
 };
 
+union bw2_userctx {
+    void* ptr;
+    int32_t val;
+};
+
 struct bw2_simpleMessage {
     /* The FROM and URI arrays are not null-terminated, so be careful. */
 
@@ -179,7 +184,8 @@ struct bw2_simpleChain {
 
 struct bw2_simplemsg_ctx {
     /* The user sets this element. */
-    bool (*on_message)(struct bw2_simpleMessage* sm, bool final, int error);
+    bool (*on_message)(struct bw2_simpleMessage* sm, bool final, int error, union bw2_userctx ctx);
+    union bw2_userctx ctx;
 
     /* The remaining elements are used internally by the bindings. */
     struct bw2_reqctx reqctx;
@@ -187,7 +193,8 @@ struct bw2_simplemsg_ctx {
 
 struct bw2_chararr_ctx {
     /* The user sets this element. */
-    bool (*on_message)(char* arr, size_t arrlen, bool final, int error);
+    bool (*on_message)(char* arr, size_t arrlen, bool final, int error, union bw2_userctx ctx);
+    union bw2_userctx ctx;
 
     /* The remaining elements are used internally by the bindings. */
     struct bw2_reqctx reqctx;
@@ -195,14 +202,14 @@ struct bw2_chararr_ctx {
 
 struct bw2_simplechain_ctx {
     /* The user sets this element. */
-    bool (*on_chain)(struct bw2_simpleChain* sc, bool final, int error);
+    bool (*on_chain)(struct bw2_simpleChain* sc, bool final, int error, union bw2_userctx ctx);
+    union bw2_userctx ctx;
 
     /* The remaining elements are used internally by the bindings. */
     struct bw2_reqctx reqctx;
 };
 
 void bw2_clientInit(struct bw2_client* client);
-
 int bw2_connect(struct bw2_client* client, const struct sockaddr* addr, socklen_t addrlen, char* frameheap, size_t heapsize);
 int bw2_setEntity(struct bw2_client* client, char* entity, size_t entitylen, struct bw2_vkHash* vkhash);
 int bw2_publish(struct bw2_client* client, struct bw2_publishParams* p);

@@ -27,8 +27,8 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef FRAME_H
-#define FRAME_H
+#ifndef BW2_FRAME_H
+#define BW2_FRAME_H
 
 #include <stdint.h>
 #include <stdlib.h>
