@@ -1,4 +1,4 @@
-# BOSSWAVE Bindings for C
+# BOSSWAVE Bindings in C for Linux and RIOT
 
 ## Overview
 This library provides an implementation of the BOSSWAVE Out-of-Band (OOB) protocol in the C programming language. It allows Out-of-Band BOSSWAVE clients written in C to communicate with a local BOSSWAVE agent. It is designed to work with Linux and RIOT applications.
