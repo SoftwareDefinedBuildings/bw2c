@@ -53,6 +53,9 @@ struct bw2_cond {
 
 #include <condition.h>
 #include <mutex.h>
+#include <thread.h>
+
+#define THREAD_PRIORITY_BOSSWAVE (THREAD_PRIORITY_MAIN - 1)
 
 struct bw2_mutex {
     mutex_t mutex;

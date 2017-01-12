@@ -247,7 +247,7 @@ void* _bw2_daemon_trampoline(void* arg) {
     return NULL;
 }
 
-int bw2_connect(struct bw2_client* client, const struct sockaddr* addr, socklen_t addrlen, char* frameheap, size_t heapsize) {
+int bw2_connect(struct bw2_client* client, const struct sockaddr* addr, socklen_t addrlen, char* frameheap, size_t heapsize, char* threadstack, size_t stacksize) {
     int sock = socket(addr->sa_family, SOCK_STREAM, 0);
     if (sock == -1) {
         return BW2_ERROR_SYSTEM_RESOURCE_UNAVAILABLE;
@@ -279,7 +279,7 @@ int bw2_connect(struct bw2_client* client, const struct sockaddr* addr, socklen_
         goto closeanderror;
     }
 
-    printf("Connected to BOSSWAVE router version %.*s\n", (int) versionhdr->len, versionhdr->value);
+    bw2_logf("Connected to BOSSWAVE router version %.*s\n", (int) versionhdr->len, versionhdr->value);
 
     if (frameheap == NULL) {
         /* The frame was actually malloc'd, so we need to free it... */
@@ -297,7 +297,7 @@ int bw2_connect(struct bw2_client* client, const struct sockaddr* addr, socklen_
     dargs->client = client;
     dargs->heapsize = heapsize;
 
-    rv = bw2_threadCreate(NULL, 0, _bw2_daemon_trampoline, dargs, NULL);
+    rv = bw2_threadCreate(threadstack, stacksize, _bw2_daemon_trampoline, dargs, NULL);
     if (rv != 0) {
         goto closeanderror;
     }

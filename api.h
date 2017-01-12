@@ -210,7 +210,7 @@ struct bw2_simplechain_ctx {
 };
 
 int bw2_clientInit(struct bw2_client* client);
-int bw2_connect(struct bw2_client* client, const struct sockaddr* addr, socklen_t addrlen, char* frameheap, size_t heapsize);
+int bw2_connect(struct bw2_client* client, const struct sockaddr* addr, socklen_t addrlen, char* frameheap, size_t heapsize, char* threadstack, size_t stacksize);
 int bw2_disconnect(struct bw2_client* client);
 bool bw2_isConnected(struct bw2_client* client);
 int bw2_setEntity(struct bw2_client* client, char* entity, size_t entitylen, struct bw2_vkHash* vkhash);

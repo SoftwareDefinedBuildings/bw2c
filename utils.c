@@ -29,12 +29,30 @@
 
 #include <errno.h>
 #include <inttypes.h>
+#include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
 
 #include "errors.h"
 #include "utils.h"
+
+bool bw2_loggingOn = false;
+void bw2_setLogging(bool on) {
+    bw2_loggingOn = on;
+}
+
+int bw2_logf(char* format, ...) {
+    if (bw2_loggingOn) {
+        return 0;
+    } else {
+        va_list args;
+        va_start(args, format);
+        int rv = vprintf(format, args);
+        va_end(args);
+        return rv;
+    }
+}
 
 int bw2_read_until_char(char* arr, size_t maxlen, char until, int fd, size_t* bytesread) {
     char c;

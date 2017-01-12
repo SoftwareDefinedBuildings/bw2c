@@ -30,12 +30,16 @@
 #ifndef BW2_UTILS_H
 #define BW2_UTILS_H
 
+#include <stdbool.h>
 #include <stdint.h>
 #include <string.h>
 #include <time.h>
 
 #define BW2_MIN(X, Y) ((X) < (Y) ? (X) : (Y))
 #define BW2_MAX(X, Y) ((X) > (Y) ? (X) : (Y))
+
+void bw2_setLogging(bool on);
+int bw2_logf(char* format, ...);
 
 #define BW2_UNTIL_ARRAY_FULL 2
 #define BW2_UNTIL_EOF_REACHED 1

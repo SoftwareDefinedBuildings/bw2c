@@ -130,7 +130,7 @@ int bw2_condDestroy(struct bw2_cond* condvar) {
 #include <thread.h>
 
 int bw2_threadCreate(char* thread_stack, int stack_size, void* (*function)(void*), void* arg, int* tid) {
-    kernel_pid_t thread_id = thread_create(thread_stack, stack_size, 0, 0, function, arg, "BOSSWAVE");
+    kernel_pid_t thread_id = thread_create(thread_stack, stack_size, THREAD_PRIORITY_BOSSWAVE, 0, function, arg, "BOSSWAVE");
 
     if (thread_id < 0) {
         return BW2_ERROR_SYSTEM_RESOURCE_UNAVAILABLE;
