@@ -32,7 +32,7 @@
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <unistd.h>
+#include <sys/socket.h>
 
 #include "errors.h"
 #include "utils.h"
@@ -61,7 +61,7 @@ int bw2_read_until_char(char* arr, size_t maxlen, char until, int fd, size_t* by
     }
 
     while (maxlen != 0) {
-        int rv = read(fd, &c, 1);
+        int rv = recv(fd, &c, 1, 0);
         if (rv == 0) {
             return BW2_UNTIL_EOF_REACHED;
         } else if (rv == -1) {
@@ -89,7 +89,7 @@ int bw2_drop_until_char(char until, int fd, size_t* bytesread) {
     }
 
     do {
-        int rv = read(fd, &c, 1);
+        int rv = recv(fd, &c, 1, 0);
         if (rv == 0) {
             return BW2_UNTIL_EOF_REACHED;
         } else if (rv == -1) {
@@ -107,7 +107,7 @@ int bw2_read_until_full(char* arr, size_t len, int fd, size_t* bytesread) {
     }
 
     while (len != 0) {
-        ssize_t rv = read(fd, arr, len);
+        ssize_t rv = recv(fd, arr, len, 0);
         if (rv == 0) {
             return BW2_UNTIL_EOF_REACHED;
         } else if (rv == -1) {
@@ -132,7 +132,7 @@ int bw2_drop_full_array(size_t len, int fd, size_t* bytesread) {
     }
 
     while (len != 0) {
-        ssize_t rv = read(fd, &c, 1);
+        ssize_t rv = recv(fd, &c, 1, 0);
         if (rv == 0) {
             return BW2_UNTIL_EOF_REACHED;
         } else if (rv == -1) {
@@ -185,7 +185,7 @@ int bw2_ponum_from_dot_form(const char* dotform, uint32_t* ponum) {
 int bw2_write_full_array(char* arr, size_t len, int fd) {
     size_t written = 0;
     while (written != len) {
-        ssize_t rv = write(fd, arr, len - written);
+        ssize_t rv = send(fd, arr, len - written, 0);
         if (rv == -1) {
             return -1;
         }

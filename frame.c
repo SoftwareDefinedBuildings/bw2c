@@ -32,7 +32,7 @@
 #include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
-#include <unistd.h>
+#include <sys/socket.h>
 
 #include "errors.h"
 #include "frame.h"
@@ -71,15 +71,11 @@ int bw2_readFrame(struct bw2_frame* frame, char* frameheap, size_t heapsize, int
 
     memset(frame, 0x00, sizeof(struct bw2_frame));
 
-    while (consumed != BW2_FRAME_HEADER_LENGTH) {
-        ssize_t rv = read(fd, &header[consumed], BW2_FRAME_HEADER_LENGTH - consumed);
-        if (rv == 0) {
-            return BW2_ERROR_MALFORMED_FRAME;
-        } else if (rv == -1) {
-            return -1;
-        } else {
-            consumed += rv;
-        }
+    int rv = bw2_read_until_full(header, BW2_FRAME_HEADER_LENGTH, fd, NULL);
+    if (rv == BW2_UNTIL_EOF_REACHED) {
+        return BW2_ERROR_MALFORMED_FRAME;
+    } else if (rv == BW2_UNTIL_ERROR) {
+        return BW2_ERROR_CONNECTION_LOST;
     }
 
     /* Now, the frame header is stored in the "header" array. */
@@ -429,7 +425,7 @@ void* _bw2_frame_heap_alloc(char* frameheap, size_t heapsize, size_t* heapused, 
 
 int _bw2_frame_consume_newline(int fd) {
     char c;
-    int rv = read(fd, &c, 1);
+    int rv = recv(fd, &c, 1, 0);
     if (rv == 0 || rv == -1 || c != '\n') {
         return 1;
     } else {
